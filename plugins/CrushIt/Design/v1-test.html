@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=800, height=500, initial-scale=1.0">
+<title>CrushIt — Signal Destruction Engine</title>
+<style>
+  :root {
+    --bg: #0B0B10;
+    --surface: #13131D;
+    --surface-alt: #1A1A28;
+    --primary: #00E5FF;
+    --secondary: #FF3860;
+    --text: #E0E4F0;
+    --text-dim: #5A6078;
+    --border: #1E1E30;
+    --glow: rgba(0,229,255,0.6);
+    --disabled: #2A2A38;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "JetBrains Mono", "Consolas", "SF Mono", "Menlo", monospace;
+    width: 800px; height: 500px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Noise overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 999;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+  }
+  /* Scanlines */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 998;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+
+  #app {
+    display: flex; flex-direction: column;
+    height: 100%; position: relative; z-index: 1;
+  }
+
+  /* ── HEADER ── */
+  #header {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 48px; padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  #logo {
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--primary);
+    text-shadow: 0 0 10px var(--glow);
+  }
+  #header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+  #bypass-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--disabled); border: 2px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+  }
+  #bypass-btn.active {
+    background: var(--secondary);
+    border-color: var(--secondary);
+    box-shadow: 0 0 10px rgba(255,56,96,0.5);
+  }
+  .global-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+
+  /* ── TAB BAR ── */
+  #tab-bar {
+    display: flex; height: 36px;
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--text-dim);
+    cursor: pointer; transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    position: relative;
+  }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+  .tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    text-shadow: 0 0 6px var(--glow);
+  }
+  .tab.disabled-mod { color: #3A3A48; }
+  .tab-indicator {
+    display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+    margin-right: 6px; background: var(--primary);
+    box-shadow: 0 0 4px var(--glow);
+  }
+  .tab.disabled-mod .tab-indicator { background: var(--disabled); box-shadow: none; }
+
+  /* ── MODULE PANEL ── */
+  #module-panel {
+    flex: 1; padding: 16px; position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .module-content {
+    display: none;
+    width: 100%; height: 100%;
+    align-items: center; justify-content: center; gap: 18px;
+  }
+  .module-content.active { display: flex; }
+
+  /* ── KNOB ── */
+  .knob-group {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    width: 72px;
+  }
+  .knob-group .knob-wrap {
+    position: relative; width: 48px; height: 48px;
+  }
+  .knob-group canvas {
+    display: block; cursor: pointer;
+  }
+  .knob-label {
+    font-size: 8px; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-dim);
+    text-align: center; line-height: 1.3;
+  }
+  .knob-value {
+    font-size: 10px; font-weight: 700; color: var(--primary);
+    text-shadow: 0 0 4px var(--glow);
+  }
+
+  /* ── POWER BTN ── */
+  .power-group {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .power-btn {
+    width: 28px; height: 28px; border-radius: 4px;
+    background: var(--disabled); border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+    position: relative;
+  }
+  .power-btn.on {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 10px var(--glow);
+  }
+  .power-btn::after {
+    content: ''; position: absolute; top: 6px; left: 50%;
+    transform: translateX(-50%);
+    width: 8px; height: 2px; background: #3A3A48;
+    border-radius: 1px;
+  }
+  .power-btn.on::after { background: var(--bg); }
+
+  .power-label {
+    font-size: 8px; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-dim); text-align: center;
+  }
+
+  /* ── DROPDOWN ── */
+  .dropdown-group {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .dropdown-select {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-family: inherit; font-size: 10px;
+    padding: 4px 8px; border-radius: 3px;
+    cursor: pointer; min-width: 100px; text-align: center;
+  }
+  .dropdown-select:hover { border-color: var(--primary); }
+  .dropdown-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 6px var(--glow); }
+  .dropdown-label {
+    font-size: 8px; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-dim);
+  }
+
+  /* ── SIGNAL CHAIN ── */
+  #signal-chain {
+    display: flex; align-items: center; justify-content: center;
+    height: 40px; padding: 0 12px; gap: 0;
+    background: var(--surface-alt);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .chain-node {
+    padding: 4px 10px; font-size: 7px; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--text-dim);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 2px; white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .chain-node.active-node { color: var(--primary); border-color: var(--primary); box-shadow: 0 0 4px rgba(0,229,255,0.2); }
+  .chain-arrow { color: var(--border); margin: 0 4px; font-size: 9px; }
+  .chain-label { font-size: 7px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin: 0 6px; }
+
+  /* ── FOOTER ── */
+  #footer {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 36px; padding: 0 16px;
+    background: var(--surface); border-top: 1px solid var(--border);
+  }
+  #meters {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .meter {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .meter-label {
+    font-size: 7px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim);
+  }
+  .meter-bar-wrap {
+    width: 80px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+  }
+  .meter-bar {
+    height: 100%; background: var(--primary); border-radius: 2px; transition: width 0.05s;
+    box-shadow: 0 0 4px var(--glow);
+  }
+  #copyright {
+    font-size: 7px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div id="logo">CRUSH//IT</div>
+    <div id="header-right">
+      <span class="global-label">BYPASS</span>
+      <div id="bypass-btn" onclick="toggleBypass()"></div>
+      <span class="global-label" style="margin-left:8px;">OUTPUT dB</span>
+      <div class="knob-group" style="width:56px;">
+        <div class="knob-wrap" id="knob-output-wrap"></div>
+        <div class="knob-value" id="val-output" style="font-size:9px;">0.0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div id="tab-bar">
+    <div class="tab active" data-tab="0"><span class="tab-indicator"></span>时空畸变</div>
+    <div class="tab" data-tab="1"><span class="tab-indicator"></span>比特压缩</div>
+    <div class="tab" data-tab="2"><span class="tab-indicator"></span>采样率腰斩</div>
+    <div class="tab" data-tab="3"><span class="tab-indicator"></span>波形裁剪</div>
+    <div class="tab" data-tab="4"><span class="tab-indicator"></span>数字噪点</div>
+    <div class="tab" data-tab="5"><span class="tab-indicator"></span>位反转</div>
+  </div>
+
+  <!-- MODULE PANEL -->
+  <div id="module-panel">
+    <!-- M1: Temporal Warp -->
+    <div class="module-content active" data-module="0">
+      <div class="power-group"><div class="power-btn on" onclick="toggleModule(0,this)"></div><div class="power-label">ENABLE</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-tw_buffer_ms"></div><div class="knob-label">BUFFER</div><div class="knob-value" id="val-tw_buffer_ms">500</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-tw_sensitivity"></div><div class="knob-label">SENS</div><div class="knob-value" id="val-tw_sensitivity">0.60</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">DETECT</div><select class="dropdown-select" id="sel-tw_detect_mode"><option selected>Transient</option><option>Pitch</option><option>Free</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-tw_jump_ms"></div><div class="knob-label">JUMP ms</div><div class="knob-value" id="val-tw_jump_ms">10</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-tw_loop_ms"></div><div class="knob-label">LOOP ms</div><div class="knob-value" id="val-tw_loop_ms">5.0</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-tw_feedback"></div><div class="knob-label">FBACK</div><div class="knob-value" id="val-tw_feedback">0.70</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">DIR</div><select class="dropdown-select" id="sel-tw_direction"><option selected>Forward</option><option>Alternating</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-tw_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-tw_mix">0.50</div></div>
+    </div>
+
+    <!-- M2: Bit Crusher -->
+    <div class="module-content" data-module="1">
+      <div class="power-group"><div class="power-btn" onclick="toggleModule(1,this)"></div><div class="power-label">ENABLE</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bc_bits"></div><div class="knob-label">BITS</div><div class="knob-value" id="val-bc_bits">12</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bc_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-bc_mix">0.50</div></div>
+    </div>
+
+    <!-- M3: SR Decimator -->
+    <div class="module-content" data-module="2">
+      <div class="power-group"><div class="power-btn" onclick="toggleModule(2,this)"></div><div class="power-label">ENABLE</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-sr_divisor"></div><div class="knob-label">DIVISOR</div><div class="knob-value" id="val-sr_divisor">4</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">HOLD</div><select class="dropdown-select" id="sel-sr_mode"><option selected>ZOH</option><option>Linear</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-sr_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-sr_mix">0.50</div></div>
+    </div>
+
+    <!-- M4: Clipper -->
+    <div class="module-content" data-module="3">
+      <div class="power-group"><div class="power-btn" onclick="toggleModule(3,this)"></div><div class="power-label">ENABLE</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-wc_drive"></div><div class="knob-label">DRIVE dB</div><div class="knob-value" id="val-wc_drive">0.0</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-wc_threshold"></div><div class="knob-label">THRESH dB</div><div class="knob-value" id="val-wc_threshold">-6.0</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">MODE</div><select class="dropdown-select" id="sel-wc_mode"><option selected>Hard</option><option>Soft</option><option>Fold</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-wc_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-wc_mix">0.50</div></div>
+    </div>
+
+    <!-- M5: Digital Debris -->
+    <div class="module-content" data-module="4">
+      <div class="power-group"><div class="power-btn" onclick="toggleModule(4,this)"></div><div class="power-label">ENABLE</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">TYPE</div><select class="dropdown-select" id="sel-dn_type"><option selected>White</option><option>Burst</option><option>Crackle</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-dn_level"></div><div class="knob-label">LEVEL</div><div class="knob-value" id="val-dn_level">0.30</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">TRIGGER</div><select class="dropdown-select" id="sel-dn_trigger"><option selected>Sync</option><option>Free</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-dn_sync_rate"></div><div class="knob-label">SYNC RATE</div><div class="knob-value" id="val-dn_sync_rate">1/4</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-dn_free_rate"></div><div class="knob-label">FREE Hz</div><div class="knob-value" id="val-dn_free_rate">8.0</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-dn_decay_ms"></div><div class="knob-label">DECAY ms</div><div class="knob-value" id="val-dn_decay_ms">20</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-dn_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-dn_mix">0.30</div></div>
+    </div>
+
+    <!-- M6: Bit Flipping -->
+    <div class="module-content" data-module="5">
+      <div class="power-group"><div class="power-btn" onclick="toggleModule(5,this)"></div><div class="power-label">ENABLE</div></div>
+      <div class="dropdown-group"><div class="dropdown-label">MODE</div><select class="dropdown-select" id="sel-bf_mode"><option selected>Invert</option><option>Random</option><option>Multiply</option></select></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bf_target_bit"></div><div class="knob-label">TARGET BIT</div><div class="knob-value" id="val-bf_target_bit" style="font-size:14px;">22</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bf_probability"></div><div class="knob-label">PROB</div><div class="knob-value" id="val-bf_probability">0.05</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bf_multiplier"></div><div class="knob-label">MULT x</div><div class="knob-value" id="val-bf_multiplier">100</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bf_clip_db"></div><div class="knob-label">CLIP dB</div><div class="knob-value" id="val-bf_clip_db">-3.0</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bf_bits_affected"></div><div class="knob-label">BITS AFF</div><div class="knob-value" id="val-bf_bits_affected">1</div></div>
+      <div class="knob-group"><div class="knob-wrap" id="knob-bf_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-bf_mix">0.50</div></div>
+    </div>
+  </div>
+
+  <!-- SIGNAL CHAIN -->
+  <div id="signal-chain">
+    <span class="chain-label">IN</span><span class="chain-arrow">→</span>
+    <span class="chain-node active-node">TW</span><span class="chain-arrow">→</span>
+    <span class="chain-node">BC</span><span class="chain-arrow">→</span>
+    <span class="chain-node">SR</span><span class="chain-arrow">→</span>
+    <span class="chain-node">WC</span><span class="chain-arrow">→</span>
+    <span class="chain-node">DN</span><span class="chain-arrow">→</span>
+    <span class="chain-node">BF</span><span class="chain-arrow">→</span>
+    <span class="chain-label">OUT</span>
+  </div>
+
+  <!-- FOOTER -->
+  <div id="footer">
+    <div id="meters">
+      <div class="meter"><span class="meter-label">IN L</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:60%"></div></div></div>
+      <div class="meter"><span class="meter-label">IN R</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:55%"></div></div></div>
+      <div class="meter" style="margin-left:12px;"><span class="meter-label">OUT L</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:45%"></div></div></div>
+      <div class="meter"><span class="meter-label">OUT R</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:40%"></div></div></div>
+    </div>
+    <div id="copyright">CRUSH//IT v0.0.0</div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──
+const modules = [
+  { name: 'tw', enabled: true },
+  { name: 'bc', enabled: false },
+  { name: 'sr', enabled: false },
+  { name: 'wc', enabled: false },
+  { name: 'dn', enabled: false },
+  { name: 'bf', enabled: false },
+];
+
+const knobParams = [
+  // [id, label, min, max, default, format, step, unit]
+  ['output', 'OUTPUT', -24, 12, 0, 'fix1', 0.5, 'dB'],
+  ['tw_buffer_ms', 'BUFFER', 50, 2000, 500, 'int', 10, 'ms'],
+  ['tw_sensitivity', 'SENS', 0, 1, 0.6, 'fix2', 0.01, ''],
+  ['tw_jump_ms', 'JUMP', 0.5, 100, 10, 'fix1', 0.5, 'ms'],
+  ['tw_loop_ms', 'LOOP', 0.5, 50, 5, 'fix1', 0.5, 'ms'],
+  ['tw_feedback', 'FBACK', 0, 0.95, 0.7, 'fix2', 0.01, ''],
+  ['tw_mix', 'MIX', 0, 1, 0.5, 'fix2', 0.01, ''],
+  ['bc_bits', 'BITS', 1, 32, 12, 'int', 1, ''],
+  ['bc_mix', 'MIX', 0, 1, 0.5, 'fix2', 0.01, ''],
+  ['sr_divisor', 'DIV', 1, 256, 4, 'int', 1, 'x'],
+  ['sr_mix', 'MIX', 0, 1, 0.5, 'fix2', 0.01, ''],
+  ['wc_drive', 'DRIVE', -12, 36, 0, 'fix1', 0.5, 'dB'],
+  ['wc_threshold', 'THRESH', -36, 0, -6, 'fix1', 0.5, 'dB'],
+  ['wc_mix', 'MIX', 0, 1, 0.5, 'fix2', 0.01, ''],
+  ['dn_level', 'LEVEL', 0, 1, 0.3, 'fix2', 0.01, ''],
+  ['dn_sync_rate', 'SYNC', 0.0625, 4, 0.25, 'sync', 0, ''],
+  ['dn_free_rate', 'FREE', 0.5, 100, 8, 'fix1', 0.5, 'Hz'],
+  ['dn_decay_ms', 'DECAY', 1, 200, 20, 'int', 1, 'ms'],
+  ['dn_mix', 'MIX', 0, 1, 0.3, 'fix2', 0.01, ''],
+  ['bf_target_bit', 'BIT', 0, 31, 22, 'int', 1, ''],
+  ['bf_probability', 'PROB', 0, 1, 0.05, 'fix2', 0.01, ''],
+  ['bf_multiplier', 'MULT', 1, 1000, 100, 'int', 1, 'x'],
+  ['bf_clip_db', 'CLIP', -24, 0, -3, 'fix1', 0.5, 'dB'],
+  ['bf_bits_affected', 'AFF', 1, 8, 1, 'int', 1, ''],
+  ['bf_mix', 'MIX', 0, 1, 0.5, 'fix2', 0.01, ''],
+];
+
+const defaults = {};
+knobParams.forEach(p => { defaults[p[0]] = p[3]; });
+
+function fmt(id, v) {
+  const p = knobParams.find(x => x[0] === id);
+  if (!p) return v;
+  if (p[4] === 'sync') {
+    if (v >= 1) return v.toFixed(0);
+    return '1/' + (1/v).toFixed(0);
+  }
+  if (p[4] === 'int') return Math.round(v).toString();
+  if (p[4] === 'fix1') return v.toFixed(1);
+  if (p[4] === 'fix2') return v.toFixed(2);
+  return v.toString();
+}
+
+// ── Knob Drawing ──
+function drawKnob(canvas, value, min, max) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const cx = w/2, cy = h/2, r = w/2 - 4;
+  ctx.clearRect(0, 0, w, h);
+
+  // Outer ring bg
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#1E1E30';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Value arc
+  const pct = (value - min) / (max - min);
+  const startAngle = Math.PI * 0.75;
+  const endAngle = Math.PI * 2.25;
+  const sweep = endAngle - startAngle;
+  const valAngle = startAngle + sweep * pct;
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, valAngle);
+  ctx.strokeStyle = '#00E5FF';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // Glow on arc
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, valAngle);
+  ctx.strokeStyle = 'rgba(0,229,255,0.3)';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  // Tick
+  const tx = cx + Math.cos(valAngle) * (r - 5);
+  const ty = cy + Math.sin(valAngle) * (r - 5);
+  const tix = cx + Math.cos(valAngle) * (r - 11);
+  const tiy = cy + Math.sin(valAngle) * (r - 11);
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tix, tiy);
+  ctx.strokeStyle = '#00E5FF';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI*2);
+  ctx.fillStyle = '#00E5FF';
+  ctx.fill();
+}
+
+// ── Init all knobs ──
+const knobState = {};
+knobParams.forEach(p => {
+  const id = p[0];
+  knobState[id] = p[3];
+  const wrap = document.getElementById('knob-' + id + '-wrap');
+  if (!wrap) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 48; canvas.height = 48;
+  wrap.appendChild(canvas);
+  drawKnob(canvas, p[3], p[1], p[2]);
+
+  let dragging = false;
+  let startY = 0;
+  let startVal = 0;
+
+  canvas.addEventListener('mousedown', e => {
+    dragging = true;
+    startY = e.clientY;
+    startVal = knobState[id];
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    const range = p[2] - p[1];
+    const step = p[5] || range / 200;
+    let newVal = startVal + (dy / 100) * range;
+    newVal = Math.round(newVal / step) * step;
+    newVal = Math.max(p[1], Math.min(p[2], newVal));
+    knobState[id] = newVal;
+    drawKnob(canvas, newVal, p[1], p[2]);
+    const valEl = document.getElementById('val-' + id);
+    if (valEl) valEl.textContent = fmt(id, newVal);
+    if (id === 'output') knobState.output = newVal;
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  canvas.addEventListener('dblclick', () => {
+    knobState[id] = p[3];
+    drawKnob(canvas, p[3], p[1], p[2]);
+    const valEl = document.getElementById('val-' + id);
+    if (valEl) valEl.textContent = fmt(id, p[3]);
+  });
+});
+
+// Special: output knob is smaller
+(function(){
+  const wrap = document.getElementById('knob-output-wrap');
+  if (!wrap) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 36; canvas.height = 36;
+  wrap.style.width = '36px'; wrap.style.height = '36px';
+  wrap.appendChild(canvas);
+  drawKnob(canvas, 0, -24, 12);
+  let dragging = false, startY = 0, startVal = 0;
+  canvas.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY; startVal = knobState.output; e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    let v = startVal + (dy / 100) * 36;
+    v = Math.round(v * 2) / 2;
+    v = Math.max(-24, Math.min(12, v));
+    knobState.output = v;
+    drawKnob(canvas, v, -24, 12);
+    document.getElementById('val-output').textContent = v.toFixed(1);
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+})();
+knobState.output = 0;
+
+// ── Tabs ──
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const idx = parseInt(tab.dataset.tab);
+    document.querySelectorAll('.module-content').forEach(m => m.classList.remove('active'));
+    document.querySelector(`[data-module="${idx}"]`).classList.add('active');
+  });
+});
+
+// ── Power buttons ──
+function toggleModule(idx, btn) {
+  modules[idx].enabled = !modules[idx].enabled;
+  btn.classList.toggle('on', modules[idx].enabled);
+  const tab = document.querySelectorAll('.tab')[idx];
+  tab.classList.toggle('disabled-mod', !modules[idx].enabled);
+  const chainNodes = document.querySelectorAll('.chain-node');
+  chainNodes[idx].classList.toggle('active-node', modules[idx].enabled);
+}
+
+// ── Bypass ──
+function toggleBypass() {
+  const btn = document.getElementById('bypass-btn');
+  btn.classList.toggle('active');
+}
+
+// ── Animate meters ──
+setInterval(() => {
+  document.querySelectorAll('.meter-bar').forEach(bar => {
+    const w = 30 + Math.random() * 50;
+    bar.style.width = w + '%';
+  });
+}, 60);
+</script>
+</body>
+</html>

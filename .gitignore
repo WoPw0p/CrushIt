@@ -1,0 +1,16 @@
+build/
+dist/
+.DS_Store
+*.o
+*.obj
+*.pyc
+__pycache__/
+*.xcodeproj
+*.xcworkspace
+*.vst3
+*.component
+*.app
+*.zip
+_tools/JUCE/
+_tools/visage/
+.claude/

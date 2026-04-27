@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=800, height=500, initial-scale=1.0">
+<title>CrushIt v2 — Signal Destruction Engine</title>
+<style>
+  :root {
+    --bg: #0B0B10;
+    --surface: #13131D;
+    --surface-alt: #1A1A28;
+    --primary: #00E5FF;
+    --secondary: #FF3860;
+    --text: #E0E4F0;
+    --text-dim: #5A6078;
+    --border: #1E1E30;
+    --glow: rgba(0,229,255,0.6);
+    --disabled: #2A2A38;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "JetBrains Mono", "Consolas", "SF Mono", "Menlo", monospace;
+    width: 800px; height: 500px; overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0; opacity: 0.04; pointer-events: none; z-index: 999;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 998;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+  #app { display: flex; flex-direction: column; height: 100%; position: relative; z-index: 1; }
+
+  /* HEADER */
+  #header { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  #logo { font-size: 16px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--primary); text-shadow: 0 0 10px var(--glow); }
+  #header-right { display: flex; align-items: center; gap: 14px; }
+  #bypass-btn { width: 28px; height: 28px; border-radius: 50%; background: var(--disabled); border: 2px solid var(--border); cursor: pointer; transition: all 0.15s; }
+  #bypass-btn.active { background: var(--secondary); border-color: var(--secondary); box-shadow: 0 0 10px rgba(255,56,96,0.5); }
+  .global-label { font-size: 8px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+
+  /* TAB BAR */
+  #tab-bar { display: flex; height: 32px; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); cursor: pointer; transition: all 0.2s; border-bottom: 2px solid transparent; gap: 5px; }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); text-shadow: 0 0 6px var(--glow); }
+  .tab.disabled-mod { color: #3A3A48; }
+  .tab-dot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 4px var(--glow); }
+  .tab.disabled-mod .tab-dot { background: var(--disabled); box-shadow: none; }
+
+  /* MODULE PANEL */
+  #module-panel { flex: 1; position: relative; overflow: hidden; }
+  .module-content { display: none; width: 100%; height: 100%; }
+  .module-content.active { display: flex; }
+
+  /* VISUALIZATION AREA */
+  .viz-area { flex: 1; position: relative; min-width: 0; background: var(--bg); border-right: 1px solid var(--border); overflow: hidden; }
+  .viz-area canvas { display: block; width: 100%; height: 100%; }
+  .viz-label { position: absolute; bottom: 6px; left: 10px; font-size: 7px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; pointer-events: none; }
+
+  /* CONTROLS AREA */
+  .ctrl-area { width: 320px; padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 10px; }
+
+  /* KNOB */
+  .knob-group { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 64px; }
+  .knob-group .knob-wrap { position: relative; width: 42px; height: 42px; }
+  .knob-group canvas { display: block; cursor: pointer; }
+  .knob-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); text-align: center; line-height: 1.2; }
+  .knob-value { font-size: 9px; font-weight: 700; color: var(--primary); text-shadow: 0 0 4px var(--glow); }
+
+  /* POWER BTN */
+  .power-group { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .power-btn { width: 24px; height: 24px; border-radius: 3px; background: var(--disabled); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; position: relative; }
+  .power-btn.on { background: var(--primary); border-color: var(--primary); box-shadow: 0 0 10px var(--glow); }
+  .power-btn::after { content: ''; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 6px; height: 2px; background: #3A3A48; border-radius: 1px; }
+  .power-btn.on::after { background: var(--bg); }
+  .power-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); text-align: center; }
+
+  /* DROPDOWN */
+  .dropdown-group { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .dropdown-select { background: var(--surface); color: var(--text); border: 1px solid var(--border); font-family: inherit; font-size: 9px; padding: 3px 6px; border-radius: 2px; cursor: pointer; min-width: 90px; text-align: center; }
+  .dropdown-select:hover { border-color: var(--primary); }
+  .dropdown-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 4px var(--glow); }
+  .dropdown-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); }
+
+  /* SIGNAL CHAIN */
+  #signal-chain { display: flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; gap: 0; background: var(--surface-alt); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .chain-node { padding: 3px 8px; font-size: 7px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); background: var(--surface); border: 1px solid var(--border); border-radius: 2px; white-space: nowrap; transition: all 0.2s; }
+  .chain-node.active-node { color: var(--primary); border-color: var(--primary); box-shadow: 0 0 4px rgba(0,229,255,0.2); }
+  .chain-arrow { color: var(--border); margin: 0 3px; font-size: 8px; }
+  .chain-label { font-size: 7px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin: 0 5px; }
+
+  /* FOOTER */
+  #footer { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--border); }
+  #meters { display: flex; align-items: center; gap: 10px; }
+  .meter { display: flex; align-items: center; gap: 5px; }
+  .meter-label { font-size: 6px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); }
+  .meter-bar-wrap { width: 60px; height: 3px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .meter-bar { height: 100%; background: var(--primary); border-radius: 1px; transition: width 0.05s; box-shadow: 0 0 4px var(--glow); }
+  #copyright { font-size: 7px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase; }
+
+  /* JITTER animation for Temporal Warp */
+  @keyframes jitter1 { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-3px,2px)} 40%{transform:translate(4px,-1px)} 60%{transform:translate(-2px,-3px)} 80%{transform:translate(1px,2px)} }
+  @keyframes jitter2 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(2px,-2px)} 50%{transform:translate(-3px,1px)} 75%{transform:translate(1px,3px)} }
+  .jittering .viz-area { animation: jitter1 0.15s ease-in-out infinite; }
+  .jittering .ctrl-area { animation: jitter2 0.18s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div id="logo">CRUSH//IT</div>
+    <div id="header-right">
+      <span class="global-label">BYPASS</span>
+      <div id="bypass-btn" onclick="toggleBypass()"></div>
+      <span class="global-label" style="margin-left:6px;">OUTPUT</span>
+      <div class="knob-group" style="width:48px;">
+        <div class="knob-wrap" id="knob-output-wrap"></div>
+        <div class="knob-value" id="val-output" style="font-size:8px;">0.0 dB</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div id="tab-bar">
+    <div class="tab active" data-tab="0"><span class="tab-dot"></span>TIME WARP</div>
+    <div class="tab" data-tab="1"><span class="tab-dot"></span>BIT CRUSH</div>
+    <div class="tab" data-tab="2"><span class="tab-dot"></span>SAMPLE RATE</div>
+    <div class="tab" data-tab="3"><span class="tab-dot"></span>CLIP</div>
+    <div class="tab" data-tab="4"><span class="tab-dot"></span>DEBRIS</div>
+    <div class="tab" data-tab="5"><span class="tab-dot"></span>BIT FLIP</div>
+  </div>
+
+  <!-- MODULE PANEL -->
+  <div id="module-panel">
+
+    <!-- M1: TIME WARP -->
+    <div class="module-content active" data-module="0">
+      <div class="viz-area"><canvas id="viz-tw"></canvas><span class="viz-label">BUFFER TIMELINE</span></div>
+      <div class="ctrl-area">
+        <div class="power-group"><div class="power-btn on" onclick="toggleModule(0,this)"></div><div class="power-label">ON</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-tw_buffer_ms"></div><div class="knob-label">BUFFER</div><div class="knob-value" id="val-tw_buffer_ms">500</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-tw_sensitivity"></div><div class="knob-label">SENS</div><div class="knob-value" id="val-tw_sensitivity">0.60</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">DETECT</div><select class="dropdown-select" id="sel-tw_detect_mode"><option selected>Transient</option><option>Pitch</option><option>Free</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-tw_jump_ms"></div><div class="knob-label">JUMP</div><div class="knob-value" id="val-tw_jump_ms">10</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-tw_loop_ms"></div><div class="knob-label">LOOP</div><div class="knob-value" id="val-tw_loop_ms">5.0</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-tw_feedback"></div><div class="knob-label">FBACK</div><div class="knob-value" id="val-tw_feedback">0.70</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">DIR</div><select class="dropdown-select" id="sel-tw_direction"><option selected>Forward</option><option>Alternating</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-tw_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-tw_mix">0.50</div></div>
+      </div>
+    </div>
+
+    <!-- M2: BIT CRUSH -->
+    <div class="module-content" data-module="1">
+      <div class="viz-area"><canvas id="viz-bc"></canvas><span class="viz-label">WAVEFORM · COLOR BANDING</span></div>
+      <div class="ctrl-area">
+        <div class="power-group"><div class="power-btn" onclick="toggleModule(1,this)"></div><div class="power-label">ON</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bc_bits"></div><div class="knob-label">BITS</div><div class="knob-value" id="val-bc_bits">12</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bc_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-bc_mix">0.50</div></div>
+      </div>
+    </div>
+
+    <!-- M3: SAMPLE RATE -->
+    <div class="module-content" data-module="2">
+      <div class="viz-area"><canvas id="viz-sr"></canvas><span class="viz-label">WAVEFORM · MOIRÉ ALIASING</span></div>
+      <div class="ctrl-area">
+        <div class="power-group"><div class="power-btn" onclick="toggleModule(2,this)"></div><div class="power-label">ON</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-sr_divisor"></div><div class="knob-label">DIVISOR</div><div class="knob-value" id="val-sr_divisor">4</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">HOLD</div><select class="dropdown-select" id="sel-sr_mode"><option selected>ZOH</option><option>Linear</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-sr_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-sr_mix">0.50</div></div>
+      </div>
+    </div>
+
+    <!-- M4: CLIP -->
+    <div class="module-content" data-module="3">
+      <div class="viz-area"><canvas id="viz-wc"></canvas><span class="viz-label">WAVEFORM · CLIP DETECT</span></div>
+      <div class="ctrl-area">
+        <div class="power-group"><div class="power-btn" onclick="toggleModule(3,this)"></div><div class="power-label">ON</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-wc_drive"></div><div class="knob-label">DRIVE</div><div class="knob-value" id="val-wc_drive">0.0 dB</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-wc_threshold"></div><div class="knob-label">THRESH</div><div class="knob-value" id="val-wc_threshold">-6.0 dB</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">MODE</div><select class="dropdown-select" id="sel-wc_mode"><option selected>Hard</option><option>Soft</option><option>Fold</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-wc_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-wc_mix">0.50</div></div>
+      </div>
+    </div>
+
+    <!-- M5: DEBRIS -->
+    <div class="module-content" data-module="4">
+      <div class="viz-area"><canvas id="viz-dn"></canvas><span class="viz-label">NOISE BURST · TRIGGER TIMELINE</span></div>
+      <div class="ctrl-area">
+        <div class="power-group"><div class="power-btn" onclick="toggleModule(4,this)"></div><div class="power-label">ON</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">TYPE</div><select class="dropdown-select" id="sel-dn_type"><option selected>White</option><option>Burst</option><option>Crackle</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-dn_level"></div><div class="knob-label">LEVEL</div><div class="knob-value" id="val-dn_level">0.30</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">TRIG</div><select class="dropdown-select" id="sel-dn_trigger"><option selected>Sync</option><option>Free</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-dn_sync_rate"></div><div class="knob-label">SYNC</div><div class="knob-value" id="val-dn_sync_rate">1/4</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-dn_free_rate"></div><div class="knob-label">RATE Hz</div><div class="knob-value" id="val-dn_free_rate">8.0</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-dn_decay_ms"></div><div class="knob-label">DECAY</div><div class="knob-value" id="val-dn_decay_ms">20</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-dn_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-dn_mix">0.30</div></div>
+      </div>
+    </div>
+
+    <!-- M6: BIT FLIP -->
+    <div class="module-content" data-module="5">
+      <div class="viz-area"><canvas id="viz-bf"></canvas><span class="viz-label">IEEE 754 BIT MAP · WAVEFORM</span></div>
+      <div class="ctrl-area">
+        <div class="power-group"><div class="power-btn" onclick="toggleModule(5,this)"></div><div class="power-label">ON</div></div>
+        <div class="dropdown-group"><div class="dropdown-label">MODE</div><select class="dropdown-select" id="sel-bf_mode"><option selected>Invert</option><option>Random</option><option>Multiply</option></select></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bf_target_bit"></div><div class="knob-label">TARGET BIT</div><div class="knob-value" id="val-bf_target_bit">22</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bf_probability"></div><div class="knob-label">PROB</div><div class="knob-value" id="val-bf_probability">0.05</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bf_multiplier"></div><div class="knob-label">MULT x</div><div class="knob-value" id="val-bf_multiplier">100</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bf_clip_db"></div><div class="knob-label">CLIP dB</div><div class="knob-value" id="val-bf_clip_db">-3.0</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bf_bits_affected"></div><div class="knob-label">AFFECTED</div><div class="knob-value" id="val-bf_bits_affected">1</div></div>
+        <div class="knob-group"><div class="knob-wrap" id="knob-bf_mix"></div><div class="knob-label">MIX</div><div class="knob-value" id="val-bf_mix">0.50</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SIGNAL CHAIN -->
+  <div id="signal-chain">
+    <span class="chain-label">IN</span><span class="chain-arrow">→</span>
+    <span class="chain-node active-node">TW</span><span class="chain-arrow">→</span>
+    <span class="chain-node">BC</span><span class="chain-arrow">→</span>
+    <span class="chain-node">SR</span><span class="chain-arrow">→</span>
+    <span class="chain-node">WC</span><span class="chain-arrow">→</span>
+    <span class="chain-node">DN</span><span class="chain-arrow">→</span>
+    <span class="chain-node">BF</span><span class="chain-arrow">→</span>
+    <span class="chain-label">OUT</span>
+  </div>
+
+  <!-- FOOTER -->
+  <div id="footer">
+    <div id="meters">
+      <div class="meter"><span class="meter-label">IN L</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:60%"></div></div></div>
+      <div class="meter"><span class="meter-label">IN R</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:55%"></div></div></div>
+      <div class="meter" style="margin-left:8px;"><span class="meter-label">OUT L</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:45%"></div></div></div>
+      <div class="meter"><span class="meter-label">OUT R</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:40%"></div></div></div>
+    </div>
+    <div id="copyright">CRUSH//IT v0.0.0</div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const modules = [
+  { name: 'tw', enabled: true },
+  { name: 'bc', enabled: false },
+  { name: 'sr', enabled: false },
+  { name: 'wc', enabled: false },
+  { name: 'dn', enabled: false },
+  { name: 'bf', enabled: false },
+];
+
+const knobParams = [
+  ['output', -24, 12, 0, 'fix1', 0.5],
+  ['tw_buffer_ms', 50, 2000, 500, 'int', 10],
+  ['tw_sensitivity', 0, 1, 0.6, 'fix2', 0.01],
+  ['tw_jump_ms', 0.5, 100, 10, 'fix1', 0.5],
+  ['tw_loop_ms', 0.5, 50, 5, 'fix1', 0.5],
+  ['tw_feedback', 0, 0.95, 0.7, 'fix2', 0.01],
+  ['tw_mix', 0, 1, 0.5, 'fix2', 0.01],
+  ['bc_bits', 1, 32, 12, 'int', 1],
+  ['bc_mix', 0, 1, 0.5, 'fix2', 0.01],
+  ['sr_divisor', 1, 256, 4, 'int', 1],
+  ['sr_mix', 0, 1, 0.5, 'fix2', 0.01],
+  ['wc_drive', -12, 36, 0, 'fix1', 0.5],
+  ['wc_threshold', -36, 0, -6, 'fix1', 0.5],
+  ['wc_mix', 0, 1, 0.5, 'fix2', 0.01],
+  ['dn_level', 0, 1, 0.3, 'fix2', 0.01],
+  ['dn_sync_rate', 0.0625, 4, 0.25, 'sync', 0],
+  ['dn_free_rate', 0.5, 100, 8, 'fix1', 0.5],
+  ['dn_decay_ms', 1, 200, 20, 'int', 1],
+  ['dn_mix', 0, 1, 0.3, 'fix2', 0.01],
+  ['bf_target_bit', 0, 31, 22, 'int', 1],
+  ['bf_probability', 0, 1, 0.05, 'fix2', 0.01],
+  ['bf_multiplier', 1, 1000, 100, 'int', 1],
+  ['bf_clip_db', -24, 0, -3, 'fix1', 0.5],
+  ['bf_bits_affected', 1, 8, 1, 'int', 1],
+  ['bf_mix', 0, 1, 0.5, 'fix2', 0.01],
+];
+
+const knobState = {};
+knobParams.forEach(p => { knobState[p[0]] = p[3]; });
+
+function fmt(id, v) {
+  const p = knobParams.find(x => x[0] === id);
+  if (!p) return v;
+  if (p[4] === 'sync') { return v >= 1 ? v.toFixed(0) : '1/' + (1/v).toFixed(0); }
+  if (p[4] === 'int') return Math.round(v).toString();
+  if (p[4] === 'fix1') return v.toFixed(1);
+  if (p[4] === 'fix2') return v.toFixed(2);
+  return v.toString();
+}
+
+// ═══════════════════════════════════════════
+// GENERIC KNOB
+// ═══════════════════════════════════════════
+function drawKnob(canvas, value, min, max) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const cx = w/2, cy = h/2, r = w/2 - 4;
+  ctx.clearRect(0, 0, w, h);
+
+  // Outer ring bg
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#1E1E30';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Value arc (270° from 135° to 405°)
+  const pct = (value - min) / (max - min);
+  const startAngle = Math.PI * 0.75;
+  const sweep = Math.PI * 1.5;
+  const valAngle = startAngle + sweep * pct;
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, valAngle);
+  ctx.strokeStyle = '#00E5FF';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // Glow
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, valAngle);
+  ctx.strokeStyle = 'rgba(0,229,255,0.25)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Tick
+  const tx = cx + Math.cos(valAngle) * (r - 4);
+  const ty = cy + Math.sin(valAngle) * (r - 4);
+  const tix = cx + Math.cos(valAngle) * (r - 9);
+  const tiy = cy + Math.sin(valAngle) * (r - 9);
+  ctx.beginPath();
+  ctx.moveTo(tx, ty); ctx.lineTo(tix, tiy);
+  ctx.strokeStyle = '#00E5FF';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function initKnob(id) {
+  const p = knobParams.find(x => x[0] === id);
+  if (!p) return;
+  const wrap = document.getElementById('knob-' + id + '-wrap');
+  if (!wrap) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 42; canvas.height = 42;
+  wrap.appendChild(canvas);
+  drawKnob(canvas, p[3], p[1], p[2]);
+
+  let dragging = false, startY = 0, startVal = 0;
+  canvas.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY; startVal = knobState[id]; e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    const range = p[2] - p[1];
+    const step = p[5] || range / 200;
+    let v = startVal + (dy / 100) * range;
+    v = Math.round(v / step) * step;
+    v = Math.max(p[1], Math.min(p[2], v));
+    knobState[id] = v;
+    drawKnob(canvas, v, p[1], p[2]);
+    const vel = document.getElementById('val-' + id);
+    if (vel) vel.textContent = fmt(id, v);
+    if (id === 'output') knobState.output = v;
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  canvas.addEventListener('dblclick', () => {
+    knobState[id] = p[3];
+    drawKnob(canvas, p[3], p[1], p[2]);
+    const vel = document.getElementById('val-' + id);
+    if (vel) vel.textContent = fmt(id, p[3]);
+  });
+}
+
+// Init all knobs
+knobParams.forEach(p => initKnob(p[0]));
+knobState.output = 0;
+
+// Special: smaller output knob
+(function(){
+  const wrap = document.getElementById('knob-output-wrap');
+  if (!wrap) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 32; canvas.height = 32;
+  wrap.style.width = '32px'; wrap.style.height = '32px';
+  wrap.appendChild(canvas);
+  drawKnob(canvas, 0, -24, 12);
+  let dragging = false, startY = 0, startVal = 0;
+  canvas.addEventListener('mousedown', e => { dragging = true; startY = e.clientY; startVal = knobState.output; e.preventDefault(); });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    let v = startVal + (dy / 100) * 36;
+    v = Math.round(v * 2) / 2;
+    v = Math.max(-24, Math.min(12, v));
+    knobState.output = v;
+    drawKnob(canvas, v, -24, 12);
+    document.getElementById('val-output').textContent = v.toFixed(1) + ' dB';
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  canvas.addEventListener('dblclick', () => {
+    knobState.output = 0;
+    drawKnob(canvas, 0, -24, 12);
+    document.getElementById('val-output').textContent = '0.0 dB';
+  });
+})();
+
+// ═══════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════
+let activeTab = 0;
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeTab = parseInt(tab.dataset.tab);
+    document.querySelectorAll('.module-content').forEach(m => m.classList.remove('active'));
+    document.querySelector(`[data-module="${activeTab}"]`).classList.add('active');
+    resizeViz();
+  });
+});
+
+// ═══════════════════════════════════════════
+// POWER BUTTONS
+// ═══════════════════════════════════════════
+function toggleModule(idx, btn) {
+  modules[idx].enabled = !modules[idx].enabled;
+  btn.classList.toggle('on', modules[idx].enabled);
+  document.querySelectorAll('.tab')[idx].classList.toggle('disabled-mod', !modules[idx].enabled);
+  document.querySelectorAll('.chain-node')[idx].classList.toggle('active-node', modules[idx].enabled);
+}
+
+function toggleBypass() {
+  document.getElementById('bypass-btn').classList.toggle('active');
+}
+
+// ═══════════════════════════════════════════
+// VISUALIZATION RESIZE
+// ═══════════════════════════════════════════
+function resizeViz() {
+  ['viz-tw','viz-bc','viz-sr','viz-wc','viz-dn','viz-bf'].forEach(id => {
+    const c = document.getElementById(id);
+    if (!c) return;
+    const parent = c.parentElement;
+    if (parent && parent.clientWidth > 0) {
+      c.width = parent.clientWidth;
+      c.height = parent.clientHeight;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// VIZ 1: TIME WARP — Buffer timeline with read head
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('viz-tw');
+  let phase = 0, glitchTimer = 0, glitchActive = false;
+
+  function draw() {
+    if (activeTab !== 0) { requestAnimationFrame(draw); return; }
+    if (c.width === 0) resizeViz();
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw waveform in buffer
+    const bufX = 30, bufW = W - 60, bufY = H * 0.25, bufH = H * 0.5;
+    ctx.strokeStyle = '#1A1A28';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bufX, bufY, bufW, bufH);
+
+    // Waveform
+    ctx.beginPath();
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(0,229,255,0.4)';
+    ctx.shadowBlur = 3;
+    for (let x = 0; x < bufW; x++) {
+      const t = (x / bufW) * Math.PI * 8 + phase;
+      const y = bufY + bufH/2 + Math.sin(t) * bufH * 0.35 + Math.sin(t * 3.7) * bufH * 0.08;
+      if (x === 0) ctx.moveTo(bufX + x, y);
+      else ctx.lineTo(bufX + x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Write head (right edge)
+    const writeX = bufX + bufW - 10;
+    ctx.beginPath();
+    ctx.moveTo(writeX, bufY);
+    ctx.lineTo(writeX, bufY + bufH);
+    ctx.strokeStyle = '#FF3860';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Read head (moves, jumps on glitch)
+    const sensitivity = knobState.tw_sensitivity || 0.6;
+    glitchTimer--;
+    if (glitchTimer <= 0 && Math.random() < 0.01 * (1 + sensitivity * 4)) {
+      glitchActive = true;
+      glitchTimer = 30;
+      // Trigger jitter on panel
+      document.getElementById('module-panel').classList.add('jittering');
+      setTimeout(() => document.getElementById('module-panel').classList.remove('jittering'), 150);
+    }
+    if (glitchTimer <= 0) glitchActive = false;
+
+    const jumpPct = ((knobState.tw_jump_ms || 10) / (knobState.tw_buffer_ms || 500));
+    let readX = writeX - 30;
+    if (glitchActive) readX = writeX - 30 - jumpPct * bufW;
+
+    // Loop indicator
+    const loopLen = ((knobState.tw_loop_ms || 5) / (knobState.tw_buffer_ms || 500)) * bufW;
+    if (glitchActive && loopLen > 2) {
+      ctx.fillStyle = 'rgba(0,229,255,0.15)';
+      ctx.fillRect(readX, bufY, loopLen, bufH);
+      // Direction arrows
+      ctx.strokeStyle = 'rgba(0,229,255,0.6)';
+      ctx.lineWidth = 1;
+      const dir = document.getElementById('sel-tw_direction')?.value;
+      if (dir === 'Alternating') {
+        ctx.strokeRect(readX + 2, bufY + 6, loopLen - 4, bufH - 12);
+      }
+    }
+
+    // Read head marker
+    ctx.beginPath();
+    ctx.moveTo(readX, bufY);
+    ctx.lineTo(readX, bufY + bufH);
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Glow at read head
+    ctx.beginPath();
+    ctx.arc(readX, bufY + bufH/2, 4, 0, Math.PI * 2);
+    ctx.fillStyle = glitchActive ? '#FF3860' : '#00E5FF';
+    ctx.shadowColor = glitchActive ? 'rgba(255,56,96,0.8)' : 'rgba(0,229,255,0.8)';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Labels
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText('WRITE', writeX - 14, bufY - 4);
+    ctx.fillText('READ', readX === writeX - 30 ? writeX - 44 : readX - 14, bufY + bufH + 12);
+    ctx.fillText('BUFFER: ' + (knobState.tw_buffer_ms || 500) + 'ms', bufX, bufY - 6);
+
+    phase += 0.03;
+    requestAnimationFrame(draw);
+  }
+  setTimeout(draw, 100);
+})();
+
+// ═══════════════════════════════════════════
+// VIZ 2: BIT CRUSH — Stepped waveform + color banding
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('viz-bc');
+  let phase = 0;
+
+  function draw() {
+    if (activeTab !== 1) { requestAnimationFrame(draw); return; }
+    if (c.width === 0) resizeViz();
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const bits = Math.round(knobState.bc_bits || 12);
+    const levels = Math.pow(2, bits);
+    const step = 2.0 / levels;
+
+    // Draw color banding background (posterization)
+    for (let y = 0; y < H; y++) {
+      const rawVal = y / H;
+      const quantized = Math.round(rawVal * levels) / levels;
+      const r = Math.floor(quantized * 20);
+      const g = Math.floor(quantized * 30);
+      const b = Math.floor(quantized * 40 + 10);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(0, y, W, 1);
+    }
+
+    // Draw gradient bars showing quantization steps
+    const barW = 60;
+    for (let i = 0; i < levels; i++) {
+      const y = (H - 20) - (i / levels) * (H - 40);
+      const h = (H - 40) / levels;
+      const v = i / levels;
+      ctx.fillStyle = `rgb(${Math.floor(v*15)},${Math.floor(v*25)},${Math.floor(v*35+8)})`;
+      ctx.fillRect(W - barW - 20, y + 10, barW, Math.max(1, h));
+    }
+    ctx.strokeStyle = '#1E1E30';
+    ctx.strokeRect(W - barW - 20, 10, barW, H - 20);
+
+    // Draw quantized waveform
+    const wfY = H * 0.5;
+    const amp = H * 0.35;
+    ctx.beginPath();
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,229,255,0.5)';
+    ctx.shadowBlur = 4;
+    for (let x = 0; x < W - barW - 40; x++) {
+      const t = (x / (W - barW - 40)) * Math.PI * 8 + phase;
+      const raw = Math.sin(t) * 0.8 + Math.sin(t * 2.3) * 0.2;
+      // Quantize
+      const q = Math.round(raw / step) * step;
+      const y = wfY + q * amp;
+      if (x === 0) ctx.moveTo(20 + x, y);
+      else ctx.lineTo(20 + x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Bit depth label
+    ctx.fillStyle = '#00E5FF';
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.fillText(bits + ' bits', 20, 18);
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText('← ' + levels + ' levels →', W - barW - 18, H - 4);
+
+    phase += 0.02;
+    requestAnimationFrame(draw);
+  }
+  setTimeout(draw, 100);
+})();
+
+// ═══════════════════════════════════════════
+// VIZ 3: SAMPLE RATE — Sparse samples + moiré
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('viz-sr');
+  let phase = 0;
+
+  function draw() {
+    if (activeTab !== 2) { requestAnimationFrame(draw); return; }
+    if (c.width === 0) resizeViz();
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const divisor = Math.round(knobState.sr_divisor || 4);
+    const mode = document.getElementById('sel-sr_mode')?.value || 'ZOH';
+    const stepX = Math.max(1, divisor * 0.8);
+
+    // Moiré pattern background (intensifies with divisor)
+    ctx.globalAlpha = 0.08 * Math.min(divisor / 4, 4);
+    for (let y = 0; y < H; y += 3) {
+      for (let x = 0; x < W; x += 3) {
+        const m = Math.sin(x * 0.02 * divisor) * Math.cos(y * 0.02 * divisor) > 0.3;
+        if (m) { ctx.fillStyle = '#00E5FF'; ctx.fillRect(x, y, 3, 3); }
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Draw sparse sample points + waveform
+    const wfY = H * 0.5;
+    const amp = H * 0.35;
+    const samples = [];
+    const totalSamples = Math.floor((W - 40) / stepX);
+
+    for (let i = 0; i < totalSamples; i++) {
+      const t = (i / totalSamples) * Math.PI * 8 + phase;
+      const raw = Math.sin(t) * 0.8 + Math.sin(t * 2.7) * 0.2;
+      const x = 20 + i * stepX;
+      const y = wfY + raw * amp;
+      samples.push({ x, y, raw });
+    }
+
+    // Draw ZOH steps
+    if (mode === 'ZOH') {
+      ctx.beginPath();
+      ctx.strokeStyle = '#00E5FF';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = 'rgba(0,229,255,0.4)';
+      ctx.shadowBlur = 3;
+      for (let i = 0; i < samples.length; i++) {
+        const s = samples[i];
+        const nextX = i < samples.length - 1 ? samples[i+1].x : 20 + totalSamples * stepX;
+        if (i === 0) ctx.moveTo(s.x, s.y);
+        ctx.lineTo(nextX, s.y);
+        if (i < samples.length - 1) ctx.lineTo(nextX, samples[i+1].y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else {
+      // Linear interpolation
+      ctx.beginPath();
+      ctx.strokeStyle = '#00E5FF';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = 'rgba(0,229,255,0.4)';
+      ctx.shadowBlur = 3;
+      samples.forEach((s, i) => {
+        if (i === 0) ctx.moveTo(s.x, s.y);
+        else ctx.lineTo(s.x, s.y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Sample point dots
+    samples.forEach(s => {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#0B0B10';
+      ctx.fill();
+      ctx.strokeStyle = '#00E5FF';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    // Pixel grid overlay (intensifies with divisor)
+    if (divisor > 4) {
+      const gridSize = Math.max(2, Math.floor(divisor / 4));
+      ctx.strokeStyle = 'rgba(0,229,255,0.08)';
+      ctx.lineWidth = 0.5;
+      for (let x = 20; x < W - 20; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 10); ctx.lineTo(x, H - 10); ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = '#00E5FF';
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.fillText('÷' + divisor + '  (' + Math.round(48000/divisor) + ' Hz)', 20, 18);
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText(mode, 20, H - 4);
+
+    phase += 0.015;
+    requestAnimationFrame(draw);
+  }
+  setTimeout(draw, 100);
+})();
+
+// ═══════════════════════════════════════════
+// VIZ 4: CLIP — Waveform with clip ceiling
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('viz-wc');
+  let phase = 0;
+
+  function draw() {
+    if (activeTab !== 3) { requestAnimationFrame(draw); return; }
+    if (c.width === 0) resizeViz();
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const mode = document.getElementById('sel-wc_mode')?.value || 'Hard';
+    const driveDB = knobState.wc_drive || 0;
+    const threshDB = knobState.wc_threshold || -6;
+    const drive = Math.pow(10, driveDB / 20);
+    const thresh = Math.pow(10, threshDB / 20);
+
+    const wfY = H * 0.5;
+    const amp = H * 0.35;
+
+    // Draw threshold lines
+    const threshYPx = thresh * amp;
+    ctx.strokeStyle = 'rgba(255,56,96,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(20, wfY - threshYPx); ctx.lineTo(W - 20, wfY - threshYPx); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(20, wfY + threshYPx); ctx.lineTo(W - 20, wfY + threshYPx); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#FF3860';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText(threshDB.toFixed(0) + ' dB', W - 40, wfY - threshYPx - 3);
+    ctx.fillText(threshDB.toFixed(0) + ' dB', W - 40, wfY + threshYPx + 10);
+
+    // Draw original (dim) and clipped (bright) waveform
+    const totalPts = W - 40;
+    let anyClipping = false;
+
+    // Original
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(90,96,120,0.3)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < totalPts; x++) {
+      const t = (x / totalPts) * Math.PI * 8 + phase;
+      const raw = (Math.sin(t) * 0.8 + Math.sin(t * 2.3) * 0.2) * drive;
+      const y = wfY + raw * amp;
+      if (x === 0) ctx.moveTo(20 + x, Math.max(10, Math.min(H - 10, y)));
+      else ctx.lineTo(20 + x, Math.max(10, Math.min(H - 10, y)));
+    }
+    ctx.stroke();
+
+    // Clipped
+    ctx.beginPath();
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(0,229,255,0.5)';
+    ctx.shadowBlur = 3;
+    for (let x = 0; x < totalPts; x++) {
+      const t = (x / totalPts) * Math.PI * 8 + phase;
+      let raw = (Math.sin(t) * 0.8 + Math.sin(t * 2.3) * 0.2) * drive;
+
+      if (mode === 'Hard') {
+        raw = Math.max(-thresh, Math.min(thresh, raw));
+      } else if (mode === 'Soft') {
+        raw = Math.tanh(raw / thresh) * thresh;
+      } else {
+        // Fold
+        raw = thresh - Math.abs(Math.abs(raw + thresh) % (4 * thresh) - 2 * thresh);
+      }
+
+      if (Math.abs(raw) >= thresh * 0.98) anyClipping = true;
+
+      const y = wfY + raw * amp;
+      if (x === 0) ctx.moveTo(20 + x, Math.max(10, Math.min(H - 10, y)));
+      else ctx.lineTo(20 + x, Math.max(10, Math.min(H - 10, y)));
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Clip indicator glow
+    if (anyClipping) {
+      ctx.fillStyle = 'rgba(255,56,96,0.1)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#FF3860';
+      ctx.font = 'bold 10px "JetBrains Mono", monospace';
+      ctx.shadowColor = 'rgba(255,56,96,0.8)';
+      ctx.shadowBlur = 8;
+      ctx.fillText('CLIPPING', W - 70, 18);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.fillStyle = '#00E5FF';
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.fillText(mode.toUpperCase(), 20, 18);
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText('DRIVE: ' + (driveDB > 0 ? '+' : '') + driveDB.toFixed(0) + ' dB', 20, H - 4);
+
+    phase += 0.025;
+    requestAnimationFrame(draw);
+  }
+  setTimeout(draw, 100);
+})();
+
+// ═══════════════════════════════════════════
+// VIZ 5: DEBRIS — Noise waveform + trigger marks
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('viz-dn');
+  let phase = 0, triggerPhase = 0;
+
+  function draw() {
+    if (activeTab !== 4) { requestAnimationFrame(draw); return; }
+    if (c.width === 0) resizeViz();
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const type = document.getElementById('sel-dn_type')?.value || 'White';
+    const level = knobState.dn_level || 0.3;
+    const trigger = document.getElementById('sel-dn_trigger')?.value || 'Sync';
+    const syncRate = knobState.dn_sync_rate || 0.25;
+    const freeRate = knobState.dn_free_rate || 8;
+    const decay = knobState.dn_decay_ms || 20;
+
+    // Draw noise waveform
+    const wfY = H * 0.5;
+    const amp = H * 0.35 * level;
+    ctx.beginPath();
+    ctx.strokeStyle = '#FF3860';
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = 'rgba(255,56,96,0.4)';
+    ctx.shadowBlur = 3;
+    for (let x = 0; x < W - 20; x++) {
+      let y;
+      if (type === 'White') {
+        y = wfY + (Math.random() * 2 - 1) * amp;
+      } else if (type === 'Burst') {
+        const burstEnv = Math.exp(-triggerPhase / (decay * 0.05));
+        y = wfY + (Math.random() * 2 - 1) * amp * Math.max(0, burstEnv);
+      } else {
+        const crackleProb = 0.02 + level * 0.05;
+        const hasCrackle = Math.random() < crackleProb;
+        y = wfY + (hasCrackle ? (Math.random() * 2 - 1) * amp * 2 : 0);
+      }
+      if (x === 0) ctx.moveTo(10 + x, Math.max(5, Math.min(H - 5, y)));
+      else ctx.lineTo(10 + x, Math.max(5, Math.min(H - 5, y)));
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Trigger markers
+    const triggerInterval = trigger === 'Sync' ? (W - 20) / (syncRate * 4) : (W - 20) / (freeRate * 0.01);
+    for (let x = 0; x < W - 20; x += Math.max(8, triggerInterval)) {
+      const tx = 10 + x + (triggerPhase % triggerInterval);
+      if (tx < W - 10) {
+        ctx.fillStyle = 'rgba(0,229,255,0.4)';
+        ctx.fillRect(tx, H - 8, 2, 6);
+      }
+    }
+
+    triggerPhase += trigger === 'Sync' ? 0.3 : freeRate * 0.02;
+
+    ctx.fillStyle = type === 'White' ? '#FF3860' : type === 'Burst' ? '#FF6B3D' : '#FFD700';
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.fillText(type.toUpperCase(), 20, 18);
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText('TRIGGER: ' + trigger.toUpperCase() + ' · LEVEL: ' + level.toFixed(2), 20, H - 4);
+
+    phase += 0.5;
+    requestAnimationFrame(draw);
+  }
+  setTimeout(draw, 100);
+})();
+
+// ═══════════════════════════════════════════
+// VIZ 6: BIT FLIP — IEEE 754 bit map + corrupted waveform
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('viz-bf');
+  let phase = 0;
+
+  function draw() {
+    if (activeTab !== 5) { requestAnimationFrame(draw); return; }
+    if (c.width === 0) resizeViz();
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const mode = document.getElementById('sel-bf_mode')?.value || 'Invert';
+    const targetBit = Math.round(knobState.bf_target_bit || 22);
+    const prob = knobState.bf_probability || 0.05;
+    const bitsAffected = Math.round(knobState.bf_bits_affected || 1);
+
+    // Draw 32-bit grid at top
+    const bitW = Math.min(10, (W - 40) / 32);
+    const bitY = 28;
+    for (let b = 0; b < 32; b++) {
+      const x = 20 + b * bitW;
+      const isTarget = b >= targetBit && b < targetBit + bitsAffected;
+      const field = b === 31 ? 'S' : b >= 23 ? 'E' : 'M';
+
+      ctx.fillStyle = isTarget ? 'rgba(255,56,96,0.6)' : 'rgba(26,26,40,0.8)';
+      ctx.fillRect(x, bitY, bitW - 1, 16);
+      ctx.strokeStyle = isTarget ? '#FF3860' : '#1E1E30';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, bitY, bitW - 1, 16);
+
+      if (bitW > 7) {
+        ctx.fillStyle = isTarget ? '#FFF' : '#5A6078';
+        ctx.font = '6px "JetBrains Mono", monospace';
+        ctx.fillText(b.toString(), x + 1, bitY + 10);
+      }
+    }
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText('SIGN', 20 + 31 * bitW - 8, bitY - 2);
+    ctx.fillText('EXP', 20 + 23 * bitW, bitY - 2);
+    ctx.fillText('MANTISSA', 20, bitY - 2);
+
+    // Draw corrupted waveform
+    const wfY = H * 0.72;
+    const amp = H * 0.2;
+    ctx.beginPath();
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,229,255,0.5)';
+    ctx.shadowBlur = 3;
+    for (let x = 0; x < W - 40; x++) {
+      const t = (x / (W - 40)) * Math.PI * 8 + phase;
+      let val = Math.sin(t) * 0.8 + Math.sin(t * 2.3) * 0.2;
+
+      // Simulate bit flipping
+      if (mode === 'Multiply') {
+        if (Math.random() < prob) val *= (knobState.bf_multiplier || 100);
+        val = Math.max(-1, Math.min(1, val / (knobState.bf_multiplier || 100) * 3));
+      } else {
+        if (Math.random() < prob) {
+          const noise = mode === 'Random' ? (Math.random() * 2 - 1) * 0.5 : val * -0.7;
+          val = val * 0.5 + noise * 0.5;
+        }
+      }
+
+      const y = wfY + val * amp;
+      if (x === 0) ctx.moveTo(20 + x, Math.max(bitY + 20, Math.min(H - 10, y)));
+      else ctx.lineTo(20 + x, Math.max(bitY + 20, Math.min(H - 10, y)));
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Clean reference
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(90,96,120,0.2)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W - 40; x++) {
+      const t = (x / (W - 40)) * Math.PI * 8 + phase;
+      const y = wfY + (Math.sin(t) * 0.8 + Math.sin(t * 2.3) * 0.2) * amp;
+      if (x === 0) ctx.moveTo(20 + x, y);
+      else ctx.lineTo(20 + x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#FF3860';
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.fillText('BIT ' + targetBit + (bitsAffected > 1 ? ' +' + (bitsAffected - 1) : ''), 20, 14);
+    ctx.fillStyle = '#5A6078';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    ctx.fillText(mode.toUpperCase() + ' · PROB: ' + prob.toFixed(2), 20, H - 4);
+
+    phase += 0.02;
+    requestAnimationFrame(draw);
+  }
+  setTimeout(draw, 100);
+})();
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+window.addEventListener('resize', resizeViz);
+setTimeout(resizeViz, 200);
+
+// Animate meters
+setInterval(() => {
+  document.querySelectorAll('.meter-bar').forEach(bar => {
+    bar.style.width = (30 + Math.random() * 50) + '%';
+  });
+}, 60);
+</script>
+</body>
+</html>

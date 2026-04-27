@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=800,height=500,initial-scale=1.0">
+<title>Crush It</title>
+<style>
+:root{--bg:#0B0B10;--surf:#12121C;--surf2:#161626;--pri:#00E5FF;--sec:#FF3860;--warn:#FFB800;--txt:#D0D4E0;--dim:#4A5068;--bdr:#1A1A2E;--glow:rgba(0,229,255,.35);--off:#222236}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:"JetBrains Mono","Consolas","SF Mono","Menlo",monospace;width:800px;height:500px;overflow:hidden;user-select:none;-webkit-user-select:none}
+body::after{content:'';position:fixed;inset:0;opacity:.035;pointer-events:none;z-index:999;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:256px 256px}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:998;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.025) 2px,rgba(0,0,0,.025) 4px)}
+#app{display:flex;flex-direction:column;height:100%;position:relative;z-index:1}
+#header{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 14px;background:var(--surf);border-bottom:1px solid var(--bdr);flex-shrink:0}
+#logo{font-size:15px;font-weight:700;letter-spacing:3px;color:var(--pri);text-shadow:0 0 10px var(--glow)}
+#header-right{display:flex;align-items:center;gap:10px}
+#bypass-btn{width:22px;height:22px;border-radius:50%;background:var(--off);border:2px solid var(--bdr);cursor:pointer;transition:all .15s;flex-shrink:0}
+#bypass-btn.active{background:var(--sec);border-color:var(--sec);box-shadow:0 0 8px rgba(255,56,96,.5)}
+#out-wrap{display:flex;align-items:center;gap:6px}
+#knob-output-wrap{width:30px;height:30px;flex-shrink:0}
+#val-output{font-size:8px;font-weight:700;color:var(--pri);white-space:nowrap;min-width:38px;text-align:right}
+.hdr-label{font-size:7px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);white-space:nowrap}
+#content{flex:1;display:flex;overflow:hidden}
+#left-panel{width:400px;flex-shrink:0;overflow-y:auto;padding:5px 6px;display:flex;flex-direction:column;gap:3px}
+.mod{background:var(--surf);border:1px solid var(--bdr);border-radius:3px;padding:7px 10px 5px;cursor:pointer;transition:all .15s;flex:1}
+.mod:hover{border-color:#2A2A42;background:#17172A}
+.mod.selected{border-color:var(--pri);box-shadow:0 0 6px rgba(0,229,255,.12)}
+.mod-head{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.mod-dot{width:7px;height:7px;border-radius:50%;background:var(--off);flex-shrink:0;transition:all .15s}
+.mod-dot.on{background:var(--pri);box-shadow:0 0 6px var(--glow)}
+.mod-name{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim)}
+.mod.selected .mod-name{color:var(--pri)}
+.mod-rows{display:flex;flex-wrap:wrap;gap:3px 8px;padding-left:15px}
+.ctrl{display:flex;align-items:center;gap:4px;height:24px}
+.ctrl canvas{display:block;cursor:pointer}
+.ctrl-label{font-size:7px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);min-width:20px}
+.ctrl-val{font-size:8px;font-weight:600;color:var(--pri);min-width:24px;text-align:right}
+.mini-drop{background:var(--surf2);color:var(--txt);border:1px solid var(--bdr);font-family:inherit;font-size:7px;padding:2px 5px;border-radius:2px;cursor:pointer}
+.mini-drop:focus{outline:none;border-color:var(--pri)}
+#left-panel::-webkit-scrollbar{width:3px}
+#left-panel::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
+#right-panel{width:0;flex:0;padding:0}
+#viz-frame{position:fixed;top:50px;right:8px;width:390px;height:220px;z-index:10;border:1px solid var(--bdr);border-radius:4px;background:var(--bg);overflow:hidden;box-shadow:0 0 20px rgba(0,0,0,.6)}
+#viz-frame canvas{display:block}
+#viz-title{position:absolute;top:6px;left:9px;font-size:8px;font-weight:600;color:var(--pri);text-transform:uppercase;letter-spacing:1px;pointer-events:none;text-shadow:0 0 5px var(--glow)}
+#viz-subtitle{position:absolute;bottom:5px;right:8px;font-size:6px;color:var(--dim);text-transform:uppercase;pointer-events:none}
+#viz-hint{position:absolute;bottom:5px;left:9px;font-size:6px;color:var(--dim);pointer-events:none;display:none}
+#signal-chain{display:flex;align-items:center;justify-content:center;height:30px;padding:0 10px;background:var(--surf2);border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);gap:0;flex-shrink:0}
+.chn{padding:2px 6px;font-size:6px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);background:var(--surf);border:1px solid var(--bdr);border-radius:2px;transition:all .15s}
+.chn.on{color:var(--pri);border-color:var(--pri);box-shadow:0 0 3px rgba(0,229,255,.15)}
+.chp{width:12px;height:1px;background:var(--bdr);margin:0 1px;transition:all .3s}
+.chp.flow{background:var(--pri);box-shadow:0 0 4px var(--glow)}
+.chl{font-size:6px;color:var(--dim);margin:0 3px}
+#footer{display:flex;align-items:center;justify-content:space-between;height:28px;padding:0 14px;background:var(--surf);border-top:1px solid var(--bdr);flex-shrink:0}
+#meters{display:flex;align-items:center;gap:8px}
+.meter{display:flex;align-items:center;gap:4px}
+.meter-label{font-size:6px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim)}
+.meter-bar-wrap{width:50px;height:2px;background:var(--bdr);border-radius:1px;overflow:hidden}
+.meter-bar{height:100%;background:var(--pri);border-radius:1px;transition:width .05s;box-shadow:0 0 3px var(--glow)}
+#copyright{font-size:6px;color:var(--dim)}
+/* R-toggle dot */
+.r-dot{width:6px;height:6px;border-radius:50%;background:var(--off);flex-shrink:0;cursor:pointer;transition:all .15s;margin-left:2px}
+.r-dot.on{background:var(--warn);box-shadow:0 0 4px rgba(255,184,0,.5)}
+/* Static viz */
+#viz-static{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none}
+#viz-static.show{display:flex}
+#viz-static span{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+/* Randomization panel */
+#rnd-panel{position:fixed;bottom:62px;right:8px;width:390px;height:170px;z-index:10;background:var(--surf);border:1px solid var(--bdr);border-radius:4px;padding:7px 10px;display:flex;flex-direction:column;gap:0}
+#rnd-panel h2{font-size:9px;font-weight:600;color:var(--pri);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px}
+.rnd-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(26,26,46,.5);flex:1}
+.rnd-row:last-child{border-bottom:none}
+.rnd-left{display:flex;align-items:center;gap:7px}
+.rnd-dot{width:7px;height:7px;border-radius:50%;background:var(--off);flex-shrink:0;cursor:pointer;transition:all .15s}
+.rnd-dot.on{background:var(--warn);box-shadow:0 0 6px rgba(255,184,0,.5)}
+.rnd-label{font-size:8px;font-weight:500;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+.rnd-label.on{color:var(--warn)}
+.rnd-rate-row{display:flex;align-items:center;justify-content:space-between;padding-top:5px;margin-top:3px;border-top:1px solid var(--bdr)}
+#rnd-trigger{font-size:8px;font-family:inherit;color:var(--txt);background:var(--surf2);border:1px solid var(--bdr);border-radius:3px;cursor:pointer;padding:4px 12px;text-transform:uppercase;letter-spacing:1px}
+#rnd-trigger:hover{color:var(--pri);border-color:var(--pri)}
+.rnd-rate-label{font-size:7px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="header">
+<div id="logo">CRUSH IT</div>
+<div id="header-right">
+<span class="hdr-label">BYP</span><div id="bypass-btn"></div>
+<span class="hdr-label">OUT</span>
+<div id="knob-output-wrap"></div><span id="val-output">0.0 dB</span>
+</div></div>
+<div id="content">
+<div id="left-panel">
+<div class="mod selected" data-mod="0"><div class="mod-head"><div class="mod-dot on" id="dot-0"></div><div class="mod-name">TIME WARP</div></div><div class="mod-rows" id="row-0"></div></div>
+<div class="mod" data-mod="1"><div class="mod-head"><div class="mod-dot" id="dot-1"></div><div class="mod-name">BIT CRUSH</div></div><div class="mod-rows" id="row-1"></div></div>
+<div class="mod" data-mod="2"><div class="mod-head"><div class="mod-dot" id="dot-2"></div><div class="mod-name">SAMPLE RATE</div></div><div class="mod-rows" id="row-2"></div></div>
+<div class="mod" data-mod="3"><div class="mod-head"><div class="mod-dot" id="dot-3"></div><div class="mod-name">CLIP</div></div><div class="mod-rows" id="row-3"></div></div>
+<div class="mod" data-mod="4"><div class="mod-head"><div class="mod-dot" id="dot-4"></div><div class="mod-name">DEBRIS</div></div><div class="mod-rows" id="row-4"></div></div>
+<div class="mod" data-mod="5"><div class="mod-head"><div class="mod-dot" id="dot-5"></div><div class="mod-name">BIT FLIP</div></div><div class="mod-rows" id="row-5"></div></div>
+</div>
+<div id="right-panel">
+<div id="viz-frame">
+<canvas id="viz-canvas"></canvas>
+<div id="viz-static"><span>MODULE OFF</span></div>
+<div id="viz-title">TIME WARP</div>
+<div id="viz-subtitle">TAPE LOOP</div>
+<div id="viz-hint"></div>
+</div>
+<div id="rnd-panel">
+<h2>RANDOMIZE</h2>
+<div id="rnd-modules"></div>
+<div class="rnd-rate-row">
+<span class="rnd-rate-label">RATE</span>
+<select class="mini-drop" id="rand-rate-sel" style="width:56px;font-size:8px">
+<option>Off</option><option>1/1</option><option>1/2</option><option selected>1/4</option><option>1/8</option><option>1/16</option><option>1/32</option>
+</select>
+<button id="rnd-trigger" onclick="triggerRandomization()">FIRE</button>
+</div>
+</div></div></div>
+<div id="signal-chain">
+<span class="chl">IN</span><span class="chp" id="chp-in"></span>
+<span class="chn on" id="chn-0">TW</span><span class="chp" id="chp-0"></span>
+<span class="chn" id="chn-1">BC</span><span class="chp" id="chp-1"></span>
+<span class="chn" id="chn-2">SR</span><span class="chp" id="chp-2"></span>
+<span class="chn" id="chn-3">WC</span><span class="chp" id="chp-3"></span>
+<span class="chn" id="chn-4">DN</span><span class="chp" id="chp-4"></span>
+<span class="chn" id="chn-5">BF</span><span class="chp" id="chp-5"></span>
+<span class="chl">OUT</span>
+</div>
+<div id="footer">
+<div id="meters">
+<div class="meter"><span class="meter-label">IN L</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:60%"></div></div></div>
+<div class="meter"><span class="meter-label">IN R</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:55%"></div></div></div>
+<div class="meter" style="margin-left:8px"><span class="meter-label">OUT L</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:45%"></div></div></div>
+<div class="meter"><span class="meter-label">OUT R</span><div class="meter-bar-wrap"><div class="meter-bar" style="width:40%"></div></div></div>
+</div><div id="copyright">CRUSH IT v0.2.0</div>
+</div></div>
+
+<script>
+// ═══════════════ JUCE SliderState (inlined from JUCE library) ═══════════════
+const BasicControl_valueChangedEventId = "valueChanged";
+const BasicControl_propertiesChangedId = "propertiesChanged";
+const SliderControl_sliderDragStartedEventId = "sliderDragStarted";
+const SliderControl_sliderDragEndedEventId = "sliderDragEnded";
+
+class ListenerList {
+  constructor() { this.listeners = []; }
+  addListener(fn) { this.listeners.push(fn); }
+  removeListener(fn) { this.listeners = this.listeners.filter(l => l !== fn); }
+  callListeners() { this.listeners.forEach(fn => fn()); }
+}
+
+class SliderState {
+  constructor(name) {
+    this.name = name;
+    this.identifier = "__juce__slider" + name;
+    this.scaledValue = 0;
+    this.properties = { start: 0, end: 1, skew: 1, name: "", label: "", numSteps: 100, interval: 0, parameterIndex: -1 };
+    this.valueChangedEvent = new ListenerList();
+    this.propertiesChangedEvent = new ListenerList();
+    window.__JUCE__.backend.addEventListener(this.identifier, (event) => this.handleEvent(event));
+    window.__JUCE__.backend.emitEvent(this.identifier, { eventType: "requestInitialUpdate" });
+  }
+  setNormalisedValue(newValue) {
+    this.scaledValue = this.snapToLegalValue(this.normalisedToScaledValue(newValue));
+    window.__JUCE__.backend.emitEvent(this.identifier, { eventType: BasicControl_valueChangedEventId, value: this.scaledValue });
+  }
+  setValue(newValue) {
+    this.scaledValue = newValue;
+    window.__JUCE__.backend.emitEvent(this.identifier, { eventType: BasicControl_valueChangedEventId, value: newValue });
+  }
+  handleEvent(event) {
+    if (event.eventType === BasicControl_valueChangedEventId) { this.scaledValue = event.value; this.valueChangedEvent.callListeners(); }
+    if (event.eventType === BasicControl_propertiesChangedId) { let { eventType: _, ...rest } = event; this.properties = rest; this.propertiesChangedEvent.callListeners(); }
+  }
+  getScaledValue() { return this.scaledValue; }
+  getNormalisedValue() {
+    return Math.pow((this.scaledValue - this.properties.start) / (this.properties.end - this.properties.start), this.properties.skew);
+  }
+  normalisedToScaledValue(normalisedValue) {
+    return Math.pow(normalisedValue, 1 / this.properties.skew) * (this.properties.end - this.properties.start) + this.properties.start;
+  }
+  snapToLegalValue(value) {
+    const interval = this.properties.interval;
+    if (interval === 0) return value;
+    const start = this.properties.start;
+    return Math.max(start, Math.min(this.properties.end, start + interval * Math.floor((value - start) / interval + 0.5)));
+  }
+  addListener(fn) { this.valueChangedEvent.addListener(fn); }
+}
+
+const sliderStates = {};
+const paramValues = {};
+
+function getSliderState(id) {
+  if (!sliderStates[id]) sliderStates[id] = new SliderState(id);
+  return sliderStates[id];
+}
+
+// ═══════════════ PARAM DEFS ═══════════════
+const paramDefs = [
+  ["bypass", 0, 1, 0], ["output", -24, 12, 0],
+  ["tw_enable", 0, 1, 0], ["tw_buffer_ms", 50, 2000, 500], ["tw_sensitivity", 0, 1, 0.6],
+  ["tw_detect_mode", 0, 2, 0], ["tw_jump_ms", 0.5, 100, 10], ["tw_loop_ms", 0.5, 50, 5],
+  ["tw_feedback", 0, 0.95, 0.7], ["tw_direction", 0, 1, 0], ["tw_mix", 0, 1, 0.5],
+  ["bc_enable", 0, 1, 0], ["bc_bits", 1, 32, 12], ["bc_mix", 0, 1, 0.5],
+  ["sr_enable", 0, 1, 0], ["sr_divisor", 1, 256, 4], ["sr_mode", 0, 1, 0], ["sr_mix", 0, 1, 0.5],
+  ["wc_enable", 0, 1, 0], ["wc_drive", -12, 36, 0], ["wc_threshold", -36, 0, -6],
+  ["wc_mode", 0, 2, 0], ["wc_mix", 0, 1, 0.5],
+  ["dn_enable", 0, 1, 0], ["dn_type", 0, 2, 0], ["dn_level", 0, 1, 0.3],
+  ["dn_trigger", 0, 1, 0], ["dn_sync_rate", 0.0625, 4, 0.25],
+  ["dn_free_rate", 0.5, 100, 8], ["dn_decay_ms", 1, 200, 20], ["dn_mix", 0, 1, 0.3],
+  ["bf_enable", 0, 1, 0], ["bf_mode", 0, 2, 0], ["bf_target_bit", 0, 31, 22],
+  ["bf_probability", 0, 1, 0.05], ["bf_multiplier", 1, 1000, 100],
+  ["bf_clip_db", -24, 0, -3], ["bf_bits_affected", 1, 8, 1], ["bf_mix", 0, 1, 0.5]
+];
+
+// Map normalized->scaled per parameter
+const paramRange = {};
+paramDefs.forEach(([id, min, max, def]) => {
+  paramRange[id] = { min, max, def };
+  paramValues[id] = def;
+  const s = getSliderState(id);
+  s.addListener(() => {
+    // C++ changed — update our scaled value
+    const norm = s.getNormalisedValue();
+    paramValues[id] = min + norm * (max - min);
+  });
+});
+
+// ═══════════════ READ PARAM ═══════════════
+function K(id) {
+  if (paramValues[id] !== undefined) return paramValues[id];
+  const d = paramDefs.find(p => p[0] === id);
+  return d ? d[3] : 0;
+}
+
+// ═══════════════ MODULE LAYOUT ═══════════════
+const M = ['TIME WARP','BIT CRUSH','SAMPLE RATE','CLIP','DEBRIS','BIT FLIP'];
+const sub = ['TAPE LOOP','QUANTIZATION MATRIX','RESOLUTION DECAY','PRESSURE VESSEL','PARTICLE CLOUD','BINARY GRID'];
+let sel = 0;
+
+const modParams = [
+  ['tw_buffer_ms','tw_sensitivity','sel_tw_detect_mode','tw_jump_ms','tw_loop_ms','tw_feedback','sel_tw_direction','tw_mix'],
+  ['bc_bits','bc_mix'],
+  ['sr_divisor','sel_sr_mode','sr_mix'],
+  ['wc_drive','wc_threshold','sel_wc_mode','wc_mix'],
+  ['sel_dn_type','dn_level','sel_dn_trigger','dn_sync_rate','dn_free_rate','dn_decay_ms','dn_mix'],
+  ['sel_bf_mode','bf_target_bit','bf_probability','bf_multiplier','bf_clip_db','bf_bits_affected','bf_mix']
+];
+
+const knobMeta = {
+  tw_buffer_ms:['BUF','int',50,2000,500],tw_sensitivity:['SEN','fix2',0,1,.6],tw_jump_ms:['JMP','fix1',.5,100,10],
+  tw_loop_ms:['LOP','fix1',.5,50,5],tw_feedback:['FBK','fix2',0,.95,.7],tw_mix:['MIX','fix2',0,1,.5],
+  bc_bits:['BIT','int',1,32,12],bc_mix:['MIX','fix2',0,1,.5],
+  sr_divisor:['DIV','int',1,256,4],sr_mix:['MIX','fix2',0,1,.5],
+  wc_drive:['DRV','fix1',-12,36,0],wc_threshold:['THR','fix1',-36,0,-6],wc_mix:['MIX','fix2',0,1,.5],
+  dn_level:['LEV','fix2',0,1,.3],dn_sync_rate:['SYN','sync',.0625,4,.25],dn_free_rate:['RAT','fix1',.5,100,8],
+  dn_decay_ms:['DCY','int',1,200,20],dn_mix:['MIX','fix2',0,1,.3],
+  bf_target_bit:['BIT','int',0,31,22],bf_probability:['PRB','fix2',0,1,.05],bf_multiplier:['MUL','int',1,1000,100],
+  bf_clip_db:['CLP','fix1',-24,0,-3],bf_bits_affected:['AFF','int',1,8,1],bf_mix:['MIX','fix2',0,1,.5]
+};
+
+const dropdownMeta = {
+  sel_tw_detect_mode:['DET',['Transient','Pitch','Free']],
+  sel_tw_direction:['DIR',['Fwd','Alt']],
+  sel_sr_mode:['HLD',['ZOH','Linear']],
+  sel_wc_mode:['MOD',['Hard','Soft','Fold']],
+  sel_dn_type:['TYP',['White','Burst','Crackle']],
+  sel_dn_trigger:['TRG',['Sync','Free']],
+  sel_bf_mode:['MOD',['Invert','Random','Multiply']]
+};
+
+function fmt(id, v) {
+  const m = knobMeta[id]; if (!m) return String(v);
+  if (m[1] === 'sync') return v >= 1 ? v.toFixed(0) : '1/' + (1/v).toFixed(0);
+  if (m[1] === 'int') return Math.round(v).toString();
+  if (m[1] === 'fix1') return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+function drawMini(c, v, min, max) {
+  const ctx = c.getContext('2d'), w = c.width, h = c.height, cx = w/2, cy = h/2, r = w/2 - 2;
+  ctx.clearRect(0, 0, w, h);
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.strokeStyle = '#1E1E30'; ctx.lineWidth = 1.5; ctx.stroke();
+  const pct = (v - min) / (max - min), sa = Math.PI * 0.75, sw = Math.PI * 1.5, va = sa + sw * pct;
+  ctx.beginPath(); ctx.arc(cx, cy, r, sa, va); ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
+  const tx = cx + Math.cos(va) * (r - 2), ty = cy + Math.sin(va) * (r - 2), tix = cx + Math.cos(va) * (r - 5), tiy = cy + Math.sin(va) * (r - 5);
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tix, tiy); ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+// ═══════════════ BUILD CONTROLS ═══════════════
+modParams.forEach((pids, i) => {
+  const row = document.getElementById('row-' + i);
+  pids.forEach(pid => {
+    if (pid.startsWith('sel_')) {
+      const realId = pid.replace('sel_', '');
+      const dm = dropdownMeta[pid];
+      const d = document.createElement('div'); d.className = 'ctrl';
+      d.innerHTML = '<div class="ctrl-label">' + dm[0] + '</div><select class="mini-drop" id="dd-' + realId + '">' + dm[1].map(o => '<option>' + o + '</option>').join('') + '</select>';
+      d.querySelector('select').addEventListener('change', function() {
+        const idx = this.selectedIndex;
+        paramValues[realId] = idx;
+        const rd = paramRange[realId];
+        if (sliderStates[realId] && rd) sliderStates[realId].setNormalisedValue((idx - rd.min) / (rd.max - rd.min));
+      });
+      d.addEventListener('click', e => e.stopPropagation());
+      row.appendChild(d);
+    } else {
+      const km = knobMeta[pid]; if (!km) return;
+      const d = document.createElement('div'); d.className = 'ctrl';
+      d.innerHTML = '<div class="ctrl-label">' + km[0] + '</div><div class="knob-mini" style="width:22px;height:22px" id="kn-' + pid + '"></div><div class="ctrl-val" id="val-' + pid + '">' + fmt(pid, km[4] || km[2]) + '</div><div class="r-dot" id="rd-' + pid + '" title="Randomize"></div>';
+      row.appendChild(d);
+      const wrap = d.querySelector('.knob-mini');
+      const canvas = document.createElement('canvas'); canvas.width = 22; canvas.height = 22; wrap.appendChild(canvas);
+      drawMini(canvas, km[4] || km[2], km[2], km[3]);
+      let dragging = false, startY = 0, startVal = 0;
+      canvas.addEventListener('mousedown', e => {
+        dragging = true; startY = e.clientY;
+        startVal = paramValues[pid] !== undefined ? paramValues[pid] : (km[4] || km[2]);
+        e.preventDefault(); e.stopPropagation();
+      });
+      window.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        const dy = startY - e.clientY, range = km[3] - km[2];
+        const step = km[1] === 'int' ? 1 : km[1] === 'sync' ? 0.0625 : range / 200;
+        let v = startVal + (dy / 120) * range;
+        v = Math.round(v / step) * step;
+        v = Math.max(km[2], Math.min(km[3], v));
+        paramValues[pid] = v;
+        const r = paramRange[pid];
+        if (sliderStates[pid] && r) sliderStates[pid].setNormalisedValue((v - r.min) / (r.max - r.min));
+        drawMini(canvas, v, km[2], km[3]);
+        document.getElementById('val-' + pid).textContent = fmt(pid, v);
+      });
+      window.addEventListener('mouseup', () => { dragging = false; });
+      canvas.addEventListener('dblclick', () => {
+        const dv = km[4] || km[2];
+        paramValues[pid] = dv;
+        const r = paramRange[pid];
+        if (sliderStates[pid] && r) sliderStates[pid].setNormalisedValue((dv - r.min) / (r.max - r.min));
+        drawMini(canvas, dv, km[2], km[3]);
+        document.getElementById('val-' + pid).textContent = fmt(pid, dv);
+      });
+      // R-toggle dot
+      const rd = document.getElementById('rd-' + pid);
+      if (rd) rd.addEventListener('click', e => { e.stopPropagation(); rd.classList.toggle('on'); });
+    }
+  });
+});
+
+// Output knob
+(function() {
+  const wrap = document.getElementById('knob-output-wrap'), canvas = document.createElement('canvas');
+  canvas.width = 30; canvas.height = 30; wrap.appendChild(canvas);
+  drawMini(canvas, 0, -24, 12);
+  let d = false, sY = 0, sV = 0;
+  canvas.addEventListener('mousedown', e => { d = true; sY = e.clientY; sV = paramValues.output || 0; e.preventDefault(); });
+  window.addEventListener('mousemove', e => {
+    if (!d) return;
+    const dy = sY - e.clientY;
+    let v = sV + (dy / 120) * 36;
+    v = Math.round(v * 2) / 2; v = Math.max(-24, Math.min(12, v));
+    paramValues.output = v;
+    if (sliderStates.output) sliderStates.output.setNormalisedValue((v + 24) / 36);
+    drawMini(canvas, v, -24, 12);
+    document.getElementById('val-output').textContent = v.toFixed(1) + ' dB';
+  });
+  window.addEventListener('mouseup', () => { d = false; });
+  canvas.addEventListener('dblclick', () => {
+    paramValues.output = 0;
+    if (sliderStates.output) sliderStates.output.setNormalisedValue(24/36);
+    drawMini(canvas, 0, -24, 12);
+    document.getElementById('val-output').textContent = '0.0 dB';
+  });
+})();
+
+// Bypass
+document.getElementById('bypass-btn').addEventListener('click', function() {
+  this.classList.toggle('active');
+  const v = this.classList.contains('active') ? 1 : 0;
+  paramValues.bypass = v;
+  if (sliderStates.bypass) sliderStates.bypass.setNormalisedValue(v);
+});
+
+// Module selection
+document.querySelectorAll('.mod').forEach((m, i) => {
+  m.addEventListener('click', () => {
+    sel = i;
+    document.querySelectorAll('.mod').forEach((x, j) => x.classList.toggle('selected', j === i));
+    document.getElementById('viz-title').textContent = M[i];
+    document.getElementById('viz-subtitle').textContent = sub[i];
+  });
+});
+
+// Module enable dots
+document.querySelectorAll('.mod-dot').forEach((dot, i) => {
+  dot.addEventListener('click', e => {
+    e.stopPropagation();
+    dot.classList.toggle('on');
+    const on = dot.classList.contains('on');
+    document.getElementById('chn-' + i).classList.toggle('on', on);
+    const prefix = ['tw', 'bc', 'sr', 'wc', 'dn', 'bf'][i], eid = prefix + '_enable';
+    paramValues[eid] = on ? 1 : 0;
+    if (sliderStates[eid]) sliderStates[eid].setNormalisedValue(on ? 1 : 0);
+  });
+});
+
+// ═══════════════ PARTICLES ═══════════════
+let particles = [];
+function manageParticles(W, H, type, level, rate, decay) {
+  const target = 20 + Math.floor(level * 380), maxCap = 500;
+  while (particles.length < target && particles.length < maxCap) {
+    const angle = Math.random() * Math.PI * 2, speed = rate * (0.3 + Math.random() * 1.4);
+    particles.push({
+      x: W * 0.25 + Math.random() * W * 0.5, y: H * 0.25 + Math.random() * H * 0.5,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: decay * (0.3 + Math.random() * 1.4), maxLife: decay * (0.3 + Math.random() * 1.4),
+      r: 0.8 + Math.random() * 1.8
+    });
+  }
+  while (particles.length > target && particles.length > 0) particles.pop();
+  const bm = 8; let i = particles.length;
+  while (i--) {
+    const p = particles[i]; p.life -= 0.016;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    const drift = 0.15;
+    if (type === 'White') { p.vx += (Math.random() - 0.5) * drift; p.vy += (Math.random() - 0.5) * drift; }
+    else if (type === 'Burst') { p.vx += (Math.random() - 0.5) * drift * 2.5; p.vy += (Math.random() - 0.5) * drift * 2.5; }
+    else if (Math.random() < 0.04) { p.vx = (Math.random() - 0.5) * rate * 2.5; p.vy = (Math.random() - 0.5) * rate * 2.5; }
+    const ms = rate * 1.8 + 1, spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    if (spd > ms) { p.vx *= ms / spd; p.vy *= ms / spd; }
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < bm) { p.x = bm; p.vx *= -0.7; }
+    if (p.x > W - bm) { p.x = W - bm; p.vx *= -0.7; }
+    if (p.y < bm) { p.y = bm; p.vy *= -0.7; }
+    if (p.y > H - bm) { p.y = H - bm; p.vy *= -0.7; }
+  }
+}
+
+// ═══════════════ VIZ DRAW ═══════════════
+const vc = document.getElementById('viz-canvas');
+let phase = 0, glitchLvl = 0;
+const mouse = { x: 0, y: 0, down: false, scratch: 0 };
+
+function resizeViz() { const f = document.getElementById('viz-frame'); vc.width = f.clientWidth; vc.height = f.clientHeight; }
+setTimeout(resizeViz, 100);
+window.addEventListener('resize', resizeViz);
+vc.addEventListener('mousedown', e => { mouse.down = true; mouse.x = e.offsetX; mouse.y = e.offsetY; });
+vc.addEventListener('mousemove', e => {
+  mouse.x = e.offsetX; mouse.y = e.offsetY;
+  if (mouse.down && sel === 0) { mouse.scratch = Math.min(1, mouse.scratch + 0.15); glitchLvl = Math.max(glitchLvl, 0.3); }
+});
+vc.addEventListener('mouseup', () => { mouse.down = false; });
+vc.addEventListener('mouseleave', () => { mouse.down = false; });
+
+function safe(v, fallback) { return (v !== undefined && v !== null && isFinite(v) && !isNaN(v)) ? v : fallback; }
+
+function draw() {
+  try {
+  resizeViz(); const W = vc.width, H = vc.height;
+  if (W === 0) { requestAnimationFrame(draw); return; }
+  const ctx = vc.getContext('2d'); ctx.clearRect(0, 0, W, H);
+
+  const prefixes = ['tw','bc','sr','wc','dn','bf'];
+  const modEnabled = paramValues[prefixes[sel] + '_enable'] > 0.5;
+  const staticEl = document.getElementById('viz-static');
+  if (!modEnabled) {
+    if (staticEl) staticEl.classList.add('show');
+    ctx.fillStyle = '#0B0B10'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1A1A2E'; ctx.font = '10px "JetBrains Mono",monospace';
+    ctx.textAlign = 'center'; ctx.fillText('MODULE OFF', W/2, H/2); ctx.textAlign = 'start';
+  } else {
+    if (staticEl) staticEl.classList.remove('show');
+  }
+
+  const pad = 20;
+  glitchLvl *= 0.92; mouse.scratch *= 0.85; if (mouse.scratch < 0.001) mouse.scratch = 0;
+
+  if (modEnabled) {
+
+  if (sel === 0) {
+    // TIME WARP — tape loop
+    const cx = W/2, cy = H/2, r = Math.min(W, H) * 0.35;
+    const jmp = safe(K('tw_jump_ms'), 10), lop = safe(K('tw_loop_ms'), 5);
+    const fb = safe(K('tw_feedback'), 0.7), sens = safe(K('tw_sensitivity'), 0.6);
+    for (let l = 5; l >= 0; l--) {
+      const alpha = 0.12 + l * 0.12, ro = l * 4, po = l * fb * 0.15;
+      const tear = Math.sin(phase * 2.5 + l) * 0.5 + 0.5, isTearing = tear > 0.85 + sens * 0.1;
+      ctx.beginPath(); ctx.strokeStyle = 'rgba(0,229,255,' + alpha + ')'; ctx.lineWidth = l === 0 ? 2 : 1;
+      ctx.shadowColor = l === 0 ? 'rgba(0,229,255,' + (0.5 + glitchLvl) + ')' : 'transparent'; ctx.shadowBlur = l === 0 ? 6 + glitchLvl * 10 : 0;
+      for (let a = 0; a < Math.PI * 2; a += 0.01) {
+        const wave = (Math.sin(a * 12 + phase + po) * 0.15 + Math.sin(a * 7 - phase + po) * 0.08) * (1 + glitchLvl * 0.5);
+        let rr = r + ro + wave * r * 0.25;
+        if (isTearing && a > Math.PI * 0.3 && a < Math.PI * 0.9) rr += Math.sin((a - Math.PI * 0.3) / (Math.PI * 0.6) * Math.PI) * r * 0.15 * jmp / 50;
+        if (mouse.scratch > 0) { const ma = Math.atan2(mouse.y - cy, mouse.x - cx), md = Math.abs(a - ma); if (md < 0.5) rr -= mouse.scratch * r * 0.3 * Math.exp(-md * 5); }
+        const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+        a === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath(); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fillStyle = '#00E5FF'; ctx.shadowColor = 'rgba(0,229,255,0.8)'; ctx.shadowBlur = 10; ctx.fill(); ctx.shadowBlur = 0;
+    if (mouse.scratch > 0.01) { ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 8 + mouse.scratch * 15, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,184,0,' + mouse.scratch + ')'; ctx.lineWidth = 1.5; ctx.stroke(); }
+    if (glitchLvl > 0.2) { ctx.fillStyle = 'rgba(255,56,96,' + (glitchLvl * 0.15) + ')'; ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = '#4A5068'; ctx.font = '7px "JetBrains Mono",monospace'; ctx.fillText('JMP:' + jmp + 'ms  LOP:' + lop.toFixed(1) + 'ms  FBK:' + (K('tw_feedback') || 0.7).toFixed(2), pad, 28);
+    document.getElementById('viz-hint').style.display = 'block'; document.getElementById('viz-hint').textContent = 'DRAG TO SCRATCH';
+  } else if (sel === 1) {
+    // BIT CRUSH
+    const bits = Math.round(K('bc_bits') || 12), cols = Math.min(64, 1 << Math.min(bits, 6)), rows = Math.min(32, cols / 2);
+    const bw = (W - pad * 2) / cols, bh = (H - pad * 2 - 30) / rows;
+    for (let r = 0; r < rows; r++) { for (let c = 0; c < cols; c++) {
+      const val = (Math.sin(c / cols * Math.PI * 4 + r / rows * Math.PI * 2 + phase) * 0.5 + 0.5);
+      const qStep = 2 / (1 << bits), q = Math.floor(val / qStep) * qStep, bright = 0.15 + q * 0.4;
+      ctx.fillStyle = 'rgba(' + Math.floor(bright * 20) + ',' + Math.floor(20 + bright * 35) + ',' + Math.floor(30 + bright * 45) + ',0.85)';
+      ctx.fillRect(pad + c * bw, pad + 15 + r * bh, bw - 0.5, bh - 0.5);
+      ctx.strokeStyle = 'rgba(10,10,16,0.3)'; ctx.lineWidth = 0.3; ctx.strokeRect(pad + c * bw, pad + 15 + r * bh, bw - 0.5, bh - 0.5);
+    } }
+    ctx.fillStyle = '#00E5FF'; ctx.font = '8px "JetBrains Mono",monospace'; ctx.fillText(bits + ' BIT  ->  ' + (1 << bits) + ' LEVELS', pad, 24);
+    document.getElementById('viz-hint').style.display = 'none';
+  } else if (sel === 2) {
+    // SAMPLE RATE
+    const div = Math.round(K('sr_divisor') || 4);
+    const blockSize = Math.max(1, div * 0.35), cols = Math.floor((W - pad * 2) / blockSize), rows = Math.floor((H - pad * 2 - 20) / blockSize);
+    const ox = pad + (W - pad * 2 - cols * blockSize) / 2, oy = pad + 10 + (H - pad * 2 - 20 - rows * blockSize) / 2;
+    const cx = W / 2, cy = H / 2, maxR = Math.min(W, H) * 0.42;
+    for (let r = 0; r < rows; r++) { for (let c = 0; c < cols; c++) {
+      const bx = ox + c * blockSize, by = oy + r * blockSize;
+      const dx = (bx + blockSize / 2) - cx, dy = (by + blockSize / 2) - cy, dist = Math.sqrt(dx * dx + dy * dy) / maxR, angle = Math.atan2(dy, dx);
+      const ring = Math.sin(dist * 22 - phase * 0.5) * 0.5 + 0.5, spiral = Math.sin(dist * 15 + angle * 6 + phase) * 0.5 + 0.5, pattern = ring * 0.7 + spiral * 0.3;
+      const moire = Math.sin(dist * div * 1.8) * 0.5 + 0.5, val = pattern * 0.7 + moire * 0.3 * (div / 32);
+      const qLevels = Math.max(2, Math.floor(32 / div)), q = Math.floor(val * qLevels) / qLevels, bright = 0.08 + q * 0.35;
+      ctx.fillStyle = 'rgb(' + Math.floor(5 + bright * 18) + ',' + Math.floor(8 + bright * 35) + ',' + Math.floor(18 + bright * 50) + ')';
+      ctx.fillRect(bx, by, blockSize - (blockSize > 0.5 ? 0.4 : 0), blockSize - (blockSize > 0.5 ? 0.4 : 0));
+    } }
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.15);
+    glow.addColorStop(0, 'rgba(0,229,255,0.15)'); glow.addColorStop(1, 'rgba(0,229,255,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#00E5FF'; ctx.font = '8px "JetBrains Mono",monospace'; ctx.fillText('/' + div + ' -> ' + Math.round(48000 / div) + ' Hz', pad, pad + 8);
+    document.getElementById('viz-hint').style.display = 'none';
+  } else if (sel === 3) {
+    // CLIP
+    const rawDrive = safe(K('wc_drive'), 0), rawThresh = safe(K('wc_threshold'), -6);
+    const drive = safe(Math.pow(10, rawDrive / 20), 1);
+    const thresh = safe(Math.pow(10, rawThresh / 20), 0.5);
+    const modeIdx = Math.round(safe(K('wc_mode'), 0)), modes = ['Hard', 'Soft', 'Fold'], mode = modes[Math.min(2,Math.max(0,modeIdx))] || 'Hard';
+    const cx = W / 2, cy = H / 2, maxR = Math.min(W, H) * 0.4;
+    const boundR = safe(maxR * thresh * (mode === 'Fold' ? 1.3 : 1), 10);
+    ctx.beginPath(); ctx.arc(cx, cy, boundR, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(0,229,255,0.3)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 6]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#4A5068'; ctx.font = '6px "JetBrains Mono",monospace'; ctx.fillText('CEILING', cx + boundR + 6, cy + 2);
+    for (let i = 0; i < 12; i++) {
+      const baseR = maxR * 0.15 + i * maxR / 12 * 1.1, pulse = (Math.sin(phase * 1.8 + i * 0.7) * 0.5 + 0.5) * drive;
+      let r = baseR + pulse * maxR * 0.25, isClipped = false;
+      if (!isFinite(r) || isNaN(r)) r = 1;
+      if (mode === 'Hard') { if (r > boundR) { r = boundR; isClipped = true; } }
+      else if (mode === 'Soft') { if (r > boundR) r = boundR + (r - boundR) * 0.15; }
+      else { if (r > boundR) { r = safe(boundR - (r - boundR), 1); if (r < 0) r = 1; isClipped = true; } }
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(' + (isClipped ? '255,184,0' : '0,229,255') + ',' + (0.08 + i * 0.04) + ')'; ctx.lineWidth = 1 + (i % 3 === 0 ? 1 : 0); ctx.stroke();
+      if (isClipped) { ctx.beginPath(); ctx.arc(cx, cy, boundR, -0.15, 0.15); ctx.strokeStyle = 'rgba(255,184,0,' + (0.15 + drive * 0.05) + ')'; ctx.lineWidth = 3; ctx.stroke(); }
+    }
+    const ca = 0.15 + drive * 0.15, cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.25);
+    cg.addColorStop(0, 'rgba(0,229,255,' + Math.min(0.6, ca * 2) + ')'); cg.addColorStop(0.5, 'rgba(0,180,220,' + ca + ')'); cg.addColorStop(1, 'rgba(0,229,255,0)');
+    ctx.fillStyle = cg; ctx.fillRect(cx - maxR, cy - maxR, maxR * 2, maxR * 2);
+    const clipSignal = (Math.sin(phase * 1.8) * 0.5 + 0.5) * drive, isClipping = clipSignal > thresh;
+    if (isClipping) {
+      const flash = clipSignal - thresh;
+      ctx.beginPath(); ctx.arc(cx, cy, boundR, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,184,0,' + (0.3 + flash * 0.5) + ')'; ctx.lineWidth = 3 + flash * 4; ctx.shadowColor = 'rgba(255,184,0,0.7)'; ctx.shadowBlur = 12 + flash * 16; ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(cx, cy, boundR - 2, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,' + (0.15 + flash * 0.25) + ')'; ctx.lineWidth = 1; ctx.stroke();
+      const nBars = 4 + Math.floor(Math.random() * 6);
+      for (let b = 0; b < nBars; b++) { const by = Math.random() * H, bh = 1 + Math.random() * 5, sx = Math.floor((Math.random() - 0.5) * 10); ctx.fillStyle = 'rgba(255,56,96,' + (0.15 + Math.random() * 0.15) + ')'; ctx.fillRect(0, by, W, bh); ctx.fillStyle = 'rgba(0,229,255,' + (0.1 + Math.random() * 0.1) + ')'; ctx.fillRect(sx, by, W, bh); }
+    }
+    ctx.fillStyle = isClipping ? '#FFB800' : '#4A5068'; ctx.font = 'bold 8px "JetBrains Mono",monospace'; ctx.fillText(isClipping ? 'PRESSURE MAX' : mode.toUpperCase(), pad, 26);
+    ctx.fillStyle = '#4A5068'; ctx.font = '8px "JetBrains Mono",monospace'; ctx.fillText('DRV ' + (K('wc_drive') || 0).toFixed(0) + 'dB  .  THR ' + (K('wc_threshold') || -6).toFixed(0) + 'dB', pad, pad + 8);
+    document.getElementById('viz-hint').style.display = 'none';
+  } else if (sel === 4) {
+    // DEBRIS
+    const typeIdx = Math.round(K('dn_type') || 0), types = ['White', 'Burst', 'Crackle'], type = types[typeIdx] || 'White';
+    const level = K('dn_level') || 0.3, decay = Math.max(1, (K('dn_decay_ms') || 20)) / 16;
+    const syncRate = K('dn_sync_rate') || 0.25, freeRate = K('dn_free_rate') || 8;
+    const trig = Math.round(K('dn_trigger') || 0) < 0.5 ? 'Sync' : 'Free', rateVal = trig === 'Sync' ? syncRate * 4 + 1 : freeRate * 0.8 + 1;
+    manageParticles(W, H, type, level, rateVal, decay);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i], alpha = 0.35 + 0.65 * (p.life / p.maxLife);
+      let rgb = type === 'White' ? '0,229,255' : type === 'Burst' ? '255,107,61' : '255,215,0';
+      ctx.fillStyle = 'rgba(' + rgb + ',' + (alpha * 0.2) + ')'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(' + rgb + ',' + alpha + ')'; ctx.shadowColor = 'rgba(' + rgb + ',' + (alpha * 0.5) + ')'; ctx.shadowBlur = p.r * 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = type === 'White' ? '#00E5FF' : type === 'Burst' ? '#FF6B3D' : '#FFD700'; ctx.font = '8px "JetBrains Mono",monospace'; ctx.fillText(type.toUpperCase() + ' . ' + particles.length + ' particles', pad, 24);
+    document.getElementById('viz-hint').style.display = 'none';
+  } else if (sel === 5) {
+    // BIT FLIP
+    const tbit = Math.round(K('bf_target_bit') || 22), baff = Math.round(K('bf_bits_affected') || 1);
+    const prob = K('bf_probability') || 0.05, modeIdx = Math.round(K('bf_mode') || 0), modes = ['Invert', 'Random', 'Multiply'], mode = modes[modeIdx] || 'Invert';
+    const cols = 32, rows = 14, bw = (W - pad * 2) / cols, bh = (H - pad * 2 - 30 - 10) / rows, ox = pad, oy = pad + 22;
+    for (let r = 0; r < rows; r++) { for (let c = 0; c < cols; c++) {
+      const hit = c >= tbit && c < tbit + baff, flicker = hit && Math.random() < prob * (mode === 'Random' ? 1.5 : 1);
+      const on = hit ? (flicker ? !flicker : true) : (Math.sin(r * 0.5 + c + phase) * 0.5 + 0.5) > 0.5;
+      const alpha = on ? 0.85 : 0.15; let color = hit ? '255,56,96' : '0,229,255';
+      if (flicker) color = mode === 'Random' ? '255,184,0' : '255,56,96';
+      ctx.fillStyle = 'rgba(' + color + ',' + alpha + ')'; ctx.fillRect(ox + c * bw, oy + r * bh, bw - 0.6, bh - 0.6);
+    } }
+    ctx.fillStyle = '#4A5068'; ctx.font = '6px "JetBrains Mono",monospace'; ctx.fillText('S', ox + 31 * bw, oy - 4); ctx.fillText('EXP', ox + 23 * bw, oy - 4); ctx.fillText('MANTISSA', ox, oy - 4);
+    const wfY2 = oy + rows * bh + 12, amp2 = (H - wfY2 - pad) * 0.7;
+    ctx.beginPath(); ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 1;
+    for (let x = 0; x < W - pad * 2; x++) {
+      const t = (x / (W - pad * 2)) * Math.PI * 8 + phase; let val = Math.sin(t) * 0.6 + Math.sin(t * 2.7) * 0.15;
+      if (mode === 'Multiply') { if (Math.random() < prob) val *= (K('bf_multiplier') || 100); val = Math.max(-1, Math.min(1, val / (K('bf_multiplier') || 100) * 10)); }
+      else if (Math.random() < prob) val = mode === 'Random' ? val * 0.3 + (Math.random() * 2 - 1) * 0.6 : val * -0.65;
+      x === 0 ? ctx.moveTo(pad + x, Math.min(H - pad, Math.max(wfY2, val * amp2 + wfY2))) : ctx.lineTo(pad + x, Math.min(H - pad, Math.max(wfY2, val * amp2 + wfY2)));
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#FF3860'; ctx.font = '8px "JetBrains Mono",monospace'; ctx.fillText('BIT ' + tbit + (baff > 1 ? '-' + Math.min(31, tbit + baff - 1) : ''), pad, 24);
+    document.getElementById('viz-hint').style.display = 'none';
+  }
+
+  } // end if (modEnabled)
+
+  // Signal chain (always animate)
+  for (let i = 0; i <= 5; i++) { const el = document.getElementById('chp-' + i); if (el) el.classList.toggle('flow', document.getElementById('chn-' + i).classList.contains('on') && Math.sin(phase * 4 + i) > 0.3); }
+  document.getElementById('chp-in').classList.toggle('flow', Math.sin(phase * 4) > 0.3);
+
+  // Randomization timer (time-based, not frame count)
+  if (rndIntervalMs > 0) {
+    const now = performance.now();
+    if (now - rndLastTime >= rndIntervalMs) {
+      rndLastTime = now;
+      triggerRandomization();
+    }
+  }
+
+  phase += 0.03;
+  } catch(e) { console.warn('Viz error:', e.message); }
+  requestAnimationFrame(draw);
+}
+setTimeout(draw, 200);
+// ═══════════════ RANDOMIZATION ENGINE ═══════════════
+let rndIntervalMs = 0, rndLastTime = 0;
+const rndBeats = [0, 500, 250, 125, 62, 31, 16, 8];
+
+document.getElementById('rnd-panel').querySelector('#rand-rate-sel').addEventListener('change', function() {
+  const idx = this.selectedIndex;
+  paramValues.rand_rate = idx;
+  if (sliderStates.rand_rate) sliderStates.rand_rate.setNormalisedValue(idx / 11);
+  rndIntervalMs = rndBeats[Math.min(7, idx)] || 0;
+  if (idx > 0) rndLastTime = performance.now();
+});
+rndIntervalMs = 125;
+rndLastTime = performance.now();
+
+// Build randomization panel — simple module toggles
+const rndModNames = ['TIME WARP','BIT CRUSH','SAMPLE RATE','CLIP','DEBRIS','BIT FLIP'];
+const rndContainer = document.getElementById('rnd-modules');
+const rndModStates = [false, false, false, false, false, false];
+modParams.forEach((pids, i) => {
+  const row = document.createElement('div'); row.className = 'rnd-row';
+  const left = document.createElement('div'); left.className = 'rnd-left';
+  const dot = document.createElement('div'); dot.className = 'rnd-dot';
+  dot.id = 'rnd-dot-' + i;
+  const label = document.createElement('div'); label.className = 'rnd-label';
+  label.textContent = rndModNames[i];
+  left.appendChild(dot); left.appendChild(label);
+  row.appendChild(left);
+  row.addEventListener('click', () => {
+    rndModStates[i] = !rndModStates[i];
+    dot.classList.toggle('on', rndModStates[i]);
+    label.classList.toggle('on', rndModStates[i]);
+    // Sync in-module R-dots
+    pids.forEach(pid => {
+      const rd = document.getElementById('rd-' + pid);
+      if (rd) { if (rndModStates[i]) rd.classList.add('on'); else rd.classList.remove('on'); }
+    });
+  });
+  rndContainer.appendChild(row);
+});
+
+function triggerRandomization() {
+  const targets = [];
+  modParams.forEach((pids, i) => {
+    if (!rndModStates[i]) return;
+    // Check module is enabled
+    const prefixes = ['tw','bc','sr','wc','dn','bf'];
+    if (paramValues[prefixes[i] + '_enable'] <= 0.5) return;
+    pids.forEach(pid => { targets.push(pid); });
+  });
+  if (targets.length === 0) return;
+  targets.forEach(pid => {
+    const r = paramRange[pid]; if (!r) return;
+    const norm = Math.random();
+    const scaled = r.min + norm * (r.max - r.min);
+    paramValues[pid] = scaled;
+    if (sliderStates[pid]) sliderStates[pid].setNormalisedValue(norm);
+    const cvs = document.querySelector('#kn-' + pid + ' canvas');
+    if (cvs) drawMini(cvs, scaled, r.min, r.max);
+    const ve = document.getElementById('val-' + pid);
+    if (ve) ve.textContent = fmt(pid, scaled);
+  });
+}
+
+// ═══════════════ METERS ═══════════════
+window.updateMeterLevels = function(inPeak, outPeak) {
+  const inPct = Math.min(100, inPeak * 100);
+  const outPct = Math.min(100, outPeak * 100);
+  const bars = document.querySelectorAll('.meter-bar');
+  if (bars[0]) bars[0].style.width = inPct + '%';
+  if (bars[1]) bars[1].style.width = inPct + '%';
+  if (bars[2]) bars[2].style.width = outPct + '%';
+  if (bars[3]) bars[3].style.width = outPct + '%';
+};
+</script>
+</body>
+</html>
